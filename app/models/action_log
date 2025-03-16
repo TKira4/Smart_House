@@ -1,0 +1,13 @@
+from app.models.model_import import *
+
+class ActionLog(Base):
+    __tablename__ = "ActionLog"
+
+    actionID = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    userID = Column(Integer, ForeignKey("User.userID"), nullable=False)
+    deviceID = Column(Integer, ForeignKey("Device.deviceID"), nullable=False)
+    actionType = Column(String(50), nullable=False)
+    timestamp = Column(String(50), nullable=False)
+
+    user = relationship("User")
+    device = relationship("Device")
