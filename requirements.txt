@@ -1,6 +1,10 @@
-fastapi
+fastapi[all]
 uvicorn
 sqlalchemy
 paho-mqtt
 websockets
 pymysql
+python-dotenv
+passlib[bcrypt]
+pyjwt
+python-multipart
