@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+sqlalchemy
+paho-mqtt
+websockets
+pymysql
