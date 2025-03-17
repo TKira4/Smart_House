@@ -4,7 +4,7 @@ Hệ thống chống cháy nổ cho ngôi nhà thông minh
 # Tạo môi trường và cài thư viện
 ```basg
 py -m venv venv     # Tạo môi trường ảo
-
+.\venv\Scripts\activate # dir venv
 pip install -r .\requirements.txt   # Cài các thư viện cần thiết
 ```
 

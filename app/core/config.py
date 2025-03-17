@@ -10,5 +10,6 @@ class Settings:
     MQTT_PORT: int = int(os.getenv("MQTT_PORT", 1883))
     MQTT_USERNAME: str = os.getenv("MQTT_USERNAME")
     MQTT_PASSWORD: str = os.getenv("MQTT_PASSWORD")
+    SECRET_KEY: str = os.getenv("SECRET_KEY")
 
 settings = Settings()
