@@ -20,6 +20,7 @@ smart_house/
 │   ├── api/
 │   │   ├── v1/
 │   │   │   ├── routes/
+│   │   │   │   ├── auth.py
 │   │   │   │   ├── user.py         # API quản lý người dùng
 │   │   │   │   ├── home.py         # API quản lý nhà thông minh
 │   │   │   │   ├── room.py         # API quản lý phòng

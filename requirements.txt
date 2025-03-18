@@ -8,3 +8,4 @@ python-dotenv
 passlib[bcrypt]
 pyjwt
 python-multipart
+bcrypt==4.0.1
