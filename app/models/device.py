@@ -14,4 +14,5 @@ class Device(Base):
     room = relationship("Room", back_populates="devices")
     alert_logs = relationship("AlertLog", back_populates="device")
     action_logs = relationship("ActionLog", back_populates="device")
+    feedName = Column(String(100), nullable=False)
 

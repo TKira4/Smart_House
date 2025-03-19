@@ -218,7 +218,7 @@ identifier: Có thể là userName, email hoặc phoneNumber
 - Request Body:
 ```json
 {
-  "state": "ON"     # ON/OFF dựa vào lựa chọn user
+  "state": "ON"     // ON/OFF dựa vào lựa chọn user
 }
 ```
 - Reponse:

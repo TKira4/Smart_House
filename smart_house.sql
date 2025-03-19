@@ -45,6 +45,7 @@ CREATE TABLE Device (
     value DECIMAL(10,2),          -- nếu cần lưu giá trị đo được
     type VARCHAR(50) NOT NULL,
     roomID INT NOT NULL,          -- khóa ngoại đến Room.roomID
+    feedName VARCHAR(20) NOT NULL,
     PRIMARY KEY (deviceID),
     FOREIGN KEY (roomID) REFERENCES Room(roomID)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
