@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
@@ -43,3 +43,32 @@ def register_room(home_id: int, request: RoomRegisterRequest, db: Session = Depe
             "homeID": new_room.homeID
         }
     }
+    
+@router.delete("/home/{home_id}/delete", status_code=200)
+def delete_home(home_id: int, user_id: int = Query(...), db: Session = Depends(get_db)):
+    home = db.query(Home).filter(Home.homeID == home_id, Home.ownerID == user_id).first()
+    if not home:
+        raise HTTPException(status_code=404, detail="Home not found or does not belong to user")
+    db.delete(home)
+    db.commit()
+    return {"message": "Home deleted successfully"}
+
+
+class HomeSchema(BaseModel):
+    homeID: int
+    address: str
+    ownerID: int
+
+    class Config:
+        orm_mode = True  # cho phép chuyển đổi ORM object sang schema
+
+@router.get("/home/{home_id}", response_model=HomeSchema)
+def get_home(home_id: int, db: Session = Depends(get_db)):
+    home = db.query(Home).filter(Home.homeID == home_id).first()
+    if not home:
+        raise HTTPException(status_code=404, detail="Home not found")
+    return home
+
+
+
+

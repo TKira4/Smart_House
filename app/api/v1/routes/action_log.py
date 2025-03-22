@@ -1,11 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends
+# app/api/v1/routes/action_log.py
+
+from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
-import datetime
 from app.core.database import SessionLocal
 from app.models.action_log import ActionLog
+from app.models.device import Device  # <-- Đảm bảo import Device
+import datetime
 
 router = APIRouter()
 
+# Dependency để lấy session DB
 def get_db():
     db = SessionLocal()
     try:
@@ -13,14 +17,25 @@ def get_db():
     finally:
         db.close()
 
-@router.get("/device/{device_id}/actions", response_model=list)
-def get_device_actions(device_id: int, db: Session = Depends(get_db)):
-    actions = db.query(ActionLog).filter(ActionLog.deviceID == device_id).order_by(ActionLog.timestamp.desc()).all()
-    if not actions:
-        raise HTTPException(status_code=404, detail={"error": "No action logs found for this device", "status_code": 404})
-    return [{
-        "actionID": a.actionID,
-        "userID": a.userID,
-        "actionType": a.actionType,
-        "timestamp": a.timestamp.isoformat() if isinstance(a.timestamp, datetime.datetime) else str(a.timestamp)
-    } for a in actions]
+@router.get("/action_logs", status_code=status.HTTP_200_OK)
+def get_action_logs(user_id: int, db: Session = Depends(get_db)):
+    # Thực hiện join giữa ActionLog và Device để lấy deviceName
+    logs = (
+        db.query(ActionLog, Device.deviceName)
+          .join(Device, ActionLog.deviceID == Device.deviceID)
+          .filter(ActionLog.userID == user_id)
+          .all()
+    )
+    if not logs:
+        raise HTTPException(status_code=404, detail="No action logs found")
+    return [
+        {
+            "actionID": log.ActionLog.actionID,
+            "userID": log.ActionLog.userID,
+            "deviceID": log.ActionLog.deviceID,
+            "deviceName": log.deviceName,
+            "actionType": log.ActionLog.actionType,
+            "timestamp": log.ActionLog.timestamp.isoformat() if log.ActionLog.timestamp else None,
+        }
+        for log in logs
+    ]

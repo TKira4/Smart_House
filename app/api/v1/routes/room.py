@@ -4,6 +4,7 @@ from app.core.database import SessionLocal
 from app.models.room import Room
 from app.models.device import Device
 from app.models.alert_log import AlertLog
+from pydantic import BaseModel
 import datetime
 
 router = APIRouter()
@@ -42,3 +43,18 @@ def get_room_monitoring(room_id: int, db: Session = Depends(get_db)):
             "timestamp": a.timestamp.isoformat() if isinstance(a.timestamp, datetime.datetime) else str(a.timestamp)
         } for a in alerts]
     }
+
+class RoomSchema(BaseModel):
+    roomID: int
+    nameRoom: str
+
+    class Config:
+        orm_mode = True
+
+# Endpoint lấy danh sách các phòng của một nhà, trả về roomID, nameRoom và địa chỉ (lấy từ room.home.address)
+@router.get("/room/{room_id}", response_model=RoomSchema)
+def get_room(room_id: int, db: Session = Depends(get_db)):
+    room = db.query(Room).filter(Room.roomID == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    return room

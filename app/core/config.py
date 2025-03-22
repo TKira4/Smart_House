@@ -13,5 +13,10 @@ class Settings:
     MQTT_PASSWORD: str = os.getenv("MQTT_PASSWORD")
     ADAFRUIT_USERNAME: str = os.getenv("ADAFRUIT_USERNAME")
     ADAFRUIT_KEY: str = os.getenv("ADAFRUIT_KEY")
+    SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.example.com")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+    SMTP_USERNAME = os.getenv("SMTP_USERNAME", "your_email@example.com")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "your_password")
+
 
 settings = Settings()

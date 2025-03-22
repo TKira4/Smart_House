@@ -58,3 +58,14 @@ def register_home(user_id: int, request: HomeRegisterRequest, db: Session = Depe
             "ownerID": new_home.ownerID
         }
     }
+    
+@router.delete("/home/{home_id}/delete", status_code=200)
+def delete_home(home_id: int, user_id: int, db: Session = Depends(get_db)):
+    # Chỉ xóa nếu nhà thuộc về người dùng với user_id được cung cấp
+    home = db.query(Home).filter(Home.homeID == home_id, Home.ownerID == user_id).first()
+    if not home:
+        raise HTTPException(status_code=404, detail="Home not found or does not belong to user")
+    db.delete(home)
+    db.commit()
+    return {"message": "Home deleted successfully"}
+
