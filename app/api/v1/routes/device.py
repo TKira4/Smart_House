@@ -27,7 +27,6 @@ class DeviceRegisterSchema(BaseModel):
     type: str                  
     feedName: str   
 
-
 #############################
 # GET: Lấy danh sách thiết bị thuộc phòng
 #############################
@@ -59,6 +58,9 @@ def get_devices_in_room(room_id: int, db: Session = Depends(get_db)):
 
     return result
 
+#############################
+# POST: Đăng ký thiết bị
+#############################
 @router.post("/room/{room_id}/device_register", status_code=status.HTTP_201_CREATED)
 def register_device(room_id: int, device_data: DeviceRegisterSchema, user_id: int = Query(...), db: Session = Depends(get_db)):
     # Kiểm tra xem phòng có tồn tại không
@@ -82,6 +84,7 @@ def register_device(room_id: int, device_data: DeviceRegisterSchema, user_id: in
     new_action = ActionLog(
         userID=user_id,
         deviceID=new_device.deviceID,
+        deviceName=new_device.deviceName,  
         actionType="Register Device",
         timestamp=datetime.datetime.utcnow()
     )
@@ -101,7 +104,9 @@ def register_device(room_id: int, device_data: DeviceRegisterSchema, user_id: in
         }
     }
 
-# Schema để nhận dữ liệu từ body JSON
+#############################
+# POST: Điều khiển thiết bị
+#############################
 class ControlSchema(BaseModel):
     command: str
     user_id: int
@@ -124,39 +129,52 @@ def control_device_by_id(device_id: int, control: ControlSchema, db: Session = D
     new_action = ActionLog(
         userID=control.user_id,
         deviceID=device_id,
+        deviceName=device.deviceName if device.deviceName is not None else "Unknown Device",
         actionType=f"Control Device: {control.command}",
         timestamp=datetime.datetime.utcnow()
     )
     db.add(new_action)
     db.commit()
-
+    
     return {
         "message": f"Device {device.deviceName} control command sent successfully",
         "data": response_data
     }
     
+#############################
+# DELETE: Xóa thiết bị
+#############################
 @router.delete("/device/{device_id}/delete", status_code=status.HTTP_200_OK)
 def delete_device(device_id: int, user_id: int = Query(...), db: Session = Depends(get_db)):
+    """
+    Xóa thiết bị theo device_id và tạo Action Log cho thao tác xóa.
+    Các log sẽ vẫn được giữ lại.
+    """
     device = db.query(Device).filter(Device.deviceID == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
     
-    db.delete(device)
-    db.commit()
+    device_name = device.deviceName if device.deviceName is not None else "Unknown Device"
     
     # Tạo Action Log cho việc xóa thiết bị
     new_action = ActionLog(
         userID=user_id,
         deviceID=device_id,
+        deviceName=device_name,
         actionType="Delete Device",
         timestamp=datetime.datetime.utcnow()
     )
     db.add(new_action)
     db.commit()
     
-    return {"message": f"Device {device.deviceName} deleted successfully"}
+    db.delete(device)
+    db.commit()
+    
+    return {"message": f"Device {device_name} deleted successfully"}
 
-
+#############################
+# GET: Lấy threshold của thiết bị
+#############################
 @router.get("/device/{device_id}/threshold")
 def get_device_threshold(device_id: int, db: Session = Depends(get_db)):
     device = db.query(Device).filter(Device.deviceID == device_id).first()
@@ -164,6 +182,9 @@ def get_device_threshold(device_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Device not found")
     return {"device_id": device.deviceID, "threshold": device.threshold}
 
+#############################
+# PUT: Cập nhật threshold cho thiết bị
+#############################
 class ThresholdUpdateSchema(BaseModel):
     new_threshold: float
     user_id: int
@@ -182,6 +203,7 @@ def update_device_threshold(device_id: int, update_data: ThresholdUpdateSchema, 
     new_action = ActionLog(
         userID=update_data.user_id,
         deviceID=device_id,
+        deviceName=device.deviceName if device.deviceName is not None else "Unknown Device",
         actionType="Update Threshold",
         timestamp=datetime.datetime.utcnow()
     )
@@ -193,7 +215,10 @@ def update_device_threshold(device_id: int, update_data: ThresholdUpdateSchema, 
         "device_id": device.deviceID,
         "new_threshold": device.threshold
     }
-    
+
+#############################
+# GET: Lấy dữ liệu mới nhất của thiết bị
+#############################
 @router.get("/device/{device_id}/data/last")
 def get_device_last_data(device_id: int, db: Session = Depends(get_db)):
     device = db.query(Device).filter(Device.deviceID == device_id).first()
@@ -204,9 +229,12 @@ def get_device_last_data(device_id: int, db: Session = Depends(get_db)):
     try:
         data = get_last_data(device.feedName)
         return data
-    except requests.RequestException as e:
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching data from Adafruit: {str(e)}")
 
+#############################
+# GET: Lấy lịch sử dữ liệu của thiết bị
+#############################
 @router.get("/device/{device_id}/data/history")
 def get_device_history(device_id: int, limit: int = 20, db: Session = Depends(get_db)):
     device = db.query(Device).filter(Device.deviceID == device_id).first()
@@ -217,5 +245,5 @@ def get_device_history(device_id: int, limit: int = 20, db: Session = Depends(ge
     try:
         history = get_feed_history(device.feedName, limit)
         return history
-    except requests.RequestException as e:
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching history from Adafruit: {str(e)}")

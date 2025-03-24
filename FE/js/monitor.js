@@ -1,10 +1,15 @@
-// Giả sử roomID đã được lưu trong localStorage
+// monitor.js
+
+// Giả sử roomID và homeID đã được lưu trong localStorage
 const roomID = localStorage.getItem("activeRoomID");
+const homeID = localStorage.getItem("activeHomeID");
 
 // Đối tượng lưu chart instance cho từng thiết bị numeric
 const charts = {};
 
-// Hàm lấy danh sách thiết bị của phòng từ backend
+// -------------------------
+// Hàm fetch API
+// -------------------------
 async function fetchRoomDevices(roomID) {
   try {
     const response = await fetch(`http://127.0.0.1:8000/room/${roomID}/devices`);
@@ -18,7 +23,31 @@ async function fetchRoomDevices(roomID) {
   }
 }
 
-// Tạo dashboard: hiển thị card của tất cả thiết bị
+async function fetchHomeInfo(homeID) {
+  try {
+    const response = await fetch(`http://127.0.0.1:8000/home/${homeID}`);
+    if (!response.ok) throw new Error("Failed to fetch home info");
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching home info:", error);
+    return null;
+  }
+}
+
+async function fetchRoomInfo(roomID) {
+  try {
+    const response = await fetch(`http://127.0.0.1:8000/room/${roomID}`);
+    if (!response.ok) throw new Error("Failed to fetch room info");
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching room info:", error);
+    return null;
+  }
+}
+
+// -------------------------
+// Hàm tạo giao diện
+// -------------------------
 function createDashboard(devices) {
   const dashboardContainer = document.getElementById("dashboard-container");
   dashboardContainer.innerHTML = "";
@@ -26,12 +55,12 @@ function createDashboard(devices) {
   devices.forEach(device => {
     const card = document.createElement("div");
     card.className = "monitor-card col-auto";
-    card.style.position = "relative"; // cho phép vị trí con tuyệt đối
+    card.style.position = "relative"; // Cho phép vị trí con tuyệt đối
 
     let iconSrc = "";
     let title = device.deviceName || "Thiết bị";
 
-    // Tùy chỉnh icon dựa trên loại thiết bị hoặc tên thiết bị
+    // Tùy chỉnh icon dựa trên loại và tên thiết bị
     if (device.type === "numeric") {
       if (device.deviceName.toLowerCase().includes("nhiệt độ")) {
         iconSrc = "../images/nhietdo.png";
@@ -80,23 +109,23 @@ function createDashboard(devices) {
   });
 }
 
-// Tạo vùng biểu đồ cho các thiết bị numeric
 function createChartSection(devices) {
   const chartSection = document.getElementById("chart-section");
-  chartSection.innerHTML = "<h4 class='text-center'>Biểu đồ các thiết bị</h4>";
+  chartSection.innerHTML = "<h4 class='text-center'>Biểu đồ các thiết bị Numeric</h4>";
 
   // Lọc các thiết bị numeric
   const numericDevices = devices.filter(device => device.type === "numeric");
   numericDevices.forEach(device => {
     const container = document.createElement("div");
     container.className = "chart-container mb-3";
-    // Tạo canvas cho từng thiết bị numeric
     container.innerHTML = `<canvas id="chart-device-${device.deviceID}"></canvas>`;
     chartSection.appendChild(container);
   });
 }
 
-// Cập nhật giá trị thiết bị numeric (hiển thị text ở card)
+// -------------------------
+// Hàm cập nhật dữ liệu và vẽ chart
+// -------------------------
 async function updateNumericDeviceValue(device) {
   const url = `http://127.0.0.1:8000/device/${device.deviceID}/data/last`;
   try {
@@ -112,7 +141,6 @@ async function updateNumericDeviceValue(device) {
   }
 }
 
-// Vẽ chart cho 1 thiết bị numeric
 async function drawChartForDevice(device) {
   const url = `http://127.0.0.1:8000/device/${device.deviceID}/data/history?limit=20`;
   try {
@@ -173,8 +201,6 @@ async function drawChartForDevice(device) {
   }
 }
 
-
-// Cập nhật giá trị cho thiết bị non-numeric (vẫn hiển thị text)
 async function updateNonNumericDevice(device) {
   const url = `http://127.0.0.1:8000/device/${device.deviceID}/data/last`;
   try {
@@ -190,7 +216,6 @@ async function updateNonNumericDevice(device) {
   }
 }
 
-// Cập nhật toàn bộ thiết bị (card)
 async function updateAllDeviceValues(devices) {
   for (const device of devices) {
     if (device.type === "numeric") {
@@ -201,7 +226,6 @@ async function updateAllDeviceValues(devices) {
   }
 }
 
-// Vẽ biểu đồ cho tất cả thiết bị numeric
 async function drawChartsForNumericDevices(devices) {
   const numericDevices = devices.filter(device => device.type === "numeric");
   for (const device of numericDevices) {
@@ -209,23 +233,23 @@ async function drawChartsForNumericDevices(devices) {
   }
 }
 
-// Hàm điều chỉnh thiết bị: gọi API /device/{device_id}/control
+// -------------------------
+// Hàm điều chỉnh thiết bị
+// -------------------------
 async function controlDevice(deviceID) {
   const command = prompt("Nhập lệnh điều chỉnh (ví dụ: ON hoặc OFF):");
   if (!command) return;
-  
-  // Lấy user_id từ localStorage (đảm bảo user_id đã được lưu khi đăng nhập)
+
   const userID = localStorage.getItem("userID");
   if (!userID) {
     alert("Không xác định được user. Vui lòng đăng nhập lại.");
     return;
   }
-  
+
   try {
     const response = await fetch(`http://127.0.0.1:8000/device/${deviceID}/control`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // Gửi payload JSON bao gồm command và user_id
       body: JSON.stringify({ command: command, user_id: parseInt(userID) })
     });
     const result = await response.json();
@@ -240,12 +264,18 @@ async function controlDevice(deviceID) {
   }
 }
 
-
+// -------------------------
 // Hàm xóa thiết bị
+// -------------------------
 async function deleteDevice(deviceID) {
   if (!confirm("Bạn có chắc chắn muốn xóa thiết bị này?")) return;
+  const userID = localStorage.getItem("userID");
+  if (!userID) {
+    alert("Không xác định được user. Vui lòng đăng nhập lại.");
+    return;
+  }
   try {
-    const response = await fetch(`http://127.0.0.1:8000/device/${deviceID}/delete`, {
+    const response = await fetch(`http://127.0.0.1:8000/device/${deviceID}/delete?user_id=${userID}`, {
       method: "DELETE"
     });
     if (!response.ok) {
@@ -254,7 +284,6 @@ async function deleteDevice(deviceID) {
       return;
     }
     alert("Xóa thiết bị thành công!");
-    const roomID = localStorage.getItem("activeRoomID");
     const devices = await fetchRoomDevices(roomID);
     createDashboard(devices);
     drawChartsForNumericDevices(devices);
@@ -264,44 +293,79 @@ async function deleteDevice(deviceID) {
   }
 }
 
-async function fetchHomeInfo(homeID) {
-  try {
-    const response = await fetch(`http://127.0.0.1:8000/home/${homeID}`);
-    if (!response.ok) throw new Error("Failed to fetch home info");
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching home info:", error);
-    return null;
+
+// -------------------------
+// Hàm đăng ký thiết bị mới
+// -------------------------
+document.getElementById("registerDeviceForm").addEventListener("submit", async function (event) {
+  event.preventDefault();
+
+  const deviceName = document.getElementById("deviceName").value.trim();
+  const deviceType = document.getElementById("deviceType").value;
+  const feedName = document.getElementById("feedName").value.trim();
+
+  if (!deviceName || !deviceType || !feedName) {
+    showDeviceFeedback("Vui lòng nhập đầy đủ thông tin.", true);
+    return;
   }
+
+  const userID = localStorage.getItem("userID");
+  if (!userID) {
+    showDeviceFeedback("Không xác định được user. Vui lòng đăng nhập lại.", true);
+    return;
+  }
+
+  const payload = { deviceName, type: deviceType, feedName };
+
+  try {
+    const response = await fetch(`http://127.0.0.1:8000/room/${roomID}/device_register?user_id=${userID}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      showDeviceFeedback(result.detail || "Đăng ký thiết bị thất bại.", true);
+      return;
+    }
+    showDeviceFeedback(result.message, false);
+    // Reload lại danh sách thiết bị
+    const devices = await fetchRoomDevices(roomID);
+    createDashboard(devices);
+    createChartSection(devices);
+    updateAllDeviceValues(devices);
+    drawChartsForNumericDevices(devices);
+  } catch (error) {
+    console.error("Error registering device:", error);
+    showDeviceFeedback("Có lỗi xảy ra, vui lòng thử lại sau.", true);
+  }
+});
+
+// Hàm hiển thị feedback cho đăng ký thiết bị
+function showDeviceFeedback(message, isError = true) {
+  const feedbackDiv = document.getElementById("deviceFeedback");
+  feedbackDiv.classList.remove("feedback-error", "feedback-success");
+  feedbackDiv.classList.add(isError ? "feedback-error" : "feedback-success");
+  feedbackDiv.textContent = message;
+  feedbackDiv.style.display = "block";
+  setTimeout(() => {
+    feedbackDiv.style.display = "none";
+  }, 5000);
 }
 
-async function fetchRoomInfo(roomID) {
-  try {
-    const response = await fetch(`http://127.0.0.1:8000/room/${roomID}`);
-    if (!response.ok) throw new Error("Failed to fetch room info");
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching room info:", error);
-    return null;
-  }
-}
-
-
-// Main: Khi trang load, tạo dashboard và vẽ biểu đồ, cập nhật giá trị
+// -------------------------
+// Main: Khi trang load, cập nhật giao diện
+// -------------------------
 document.addEventListener("DOMContentLoaded", async () => {
-  const roomID = localStorage.getItem("activeRoomID");
-  const homeID = localStorage.getItem("activeHomeID");
-
   if (!roomID || !homeID) {
     console.error("Không xác định được phòng hoặc nhà. Vui lòng chọn lại.");
     return;
   }
 
-  // Gọi API để lấy thông tin chi tiết của nhà và phòng
+  // Cập nhật thông tin vị trí
   const homeInfo = await fetchHomeInfo(homeID);
   const roomInfo = await fetchRoomInfo(roomID);
 
-  // Cập nhật giao diện hiển thị thông tin vị trí
   const homeInfoSpan = document.getElementById("home-info");
   const roomInfoSpan = document.getElementById("room-info");
   if (homeInfo && homeInfo.address) {
@@ -311,6 +375,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     roomInfoSpan.textContent = `Phòng: ${roomInfo.nameRoom}`;
   }
 
+  // Tải danh sách thiết bị, hiển thị dashboard, chart và cập nhật giá trị
   const devices = await fetchRoomDevices(roomID);
   createDashboard(devices);
   createChartSection(devices);
@@ -318,4 +383,3 @@ document.addEventListener("DOMContentLoaded", async () => {
   drawChartsForNumericDevices(devices);
   setInterval(() => updateAllDeviceValues(devices), 5000);
 });
-

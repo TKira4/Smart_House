@@ -1,11 +1,9 @@
-# app/api/v1/routes/action_log.py
-
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
+import datetime
 from app.core.database import SessionLocal
 from app.models.action_log import ActionLog
-from app.models.device import Device  # <-- Đảm bảo import Device
-import datetime
+from app.models.device import Device  # Đảm bảo import Device
 
 router = APIRouter()
 
@@ -17,25 +15,17 @@ def get_db():
     finally:
         db.close()
 
-@router.get("/action_logs", status_code=status.HTTP_200_OK)
+@router.get("/action_logs")
 def get_action_logs(user_id: int, db: Session = Depends(get_db)):
-    # Thực hiện join giữa ActionLog và Device để lấy deviceName
-    logs = (
-        db.query(ActionLog, Device.deviceName)
-          .join(Device, ActionLog.deviceID == Device.deviceID)
-          .filter(ActionLog.userID == user_id)
-          .all()
-    )
+    logs = db.query(ActionLog).filter(ActionLog.userID == user_id).all()
     if not logs:
         raise HTTPException(status_code=404, detail="No action logs found")
-    return [
-        {
-            "actionID": log.ActionLog.actionID,
-            "userID": log.ActionLog.userID,
-            "deviceID": log.ActionLog.deviceID,
-            "deviceName": log.deviceName,
-            "actionType": log.ActionLog.actionType,
-            "timestamp": log.ActionLog.timestamp.isoformat() if log.ActionLog.timestamp else None,
-        }
-        for log in logs
-    ]
+    return [{
+        "actionID": log.actionID,
+        "userID": log.userID,
+        "deviceID": log.deviceID,
+        # Nếu deviceName trong log bị None, hiển thị dấu "-"
+        "deviceName": log.deviceName if log.deviceName is not None else "-",
+        "actionType": log.actionType,
+        "timestamp": log.timestamp.isoformat() if log.timestamp else None
+    } for log in logs]

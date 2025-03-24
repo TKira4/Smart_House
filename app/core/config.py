@@ -17,6 +17,7 @@ class Settings:
     SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
     SMTP_USERNAME = os.getenv("SMTP_USERNAME", "your_email@example.com")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "your_password")
+    print("DATABASE_URL:", os.getenv("DATABASE_URL"))
 
 
 settings = Settings()
