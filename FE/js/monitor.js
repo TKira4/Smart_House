@@ -1,385 +1,509 @@
 // monitor.js
 
-// Giả sử roomID và homeID đã được lưu trong localStorage
-const roomID = localStorage.getItem("activeRoomID");
-const homeID = localStorage.getItem("activeHomeID");
+// ======================
+// Constants and Config
+// ======================
+const API_BASE_URL = 'http://127.0.0.1:8000';
+const POLLING_INTERVAL = 5000;
+const charts = {}; // Stores Chart instances
 
-// Đối tượng lưu chart instance cho từng thiết bị numeric
-const charts = {};
+// ======================
+// Device Control Types
+// ======================
+const DeviceControlType = {
+  TOGGLE: 'toggle',
+  SLIDER: 'slider',
+  BUTTON: 'button',
+  NONE: 'none'
+};
 
-// -------------------------
-// Hàm fetch API
-// -------------------------
-async function fetchRoomDevices(roomID) {
-  try {
-    const response = await fetch(`http://127.0.0.1:8000/room/${roomID}/devices`);
-    if (!response.ok) {
-      throw new Error("Failed to fetch devices");
-    }
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching devices:", error);
-    return [];
+// ======================
+// Core Functions
+// ======================
+
+/**
+ * Initialize the monitoring dashboard
+ */
+async function initializeDashboard() {
+  const roomID = localStorage.getItem("activeRoomID");
+  const homeID = localStorage.getItem("activeHomeID");
+
+  if (!roomID || !homeID) {
+    console.error("Room or home ID not found");
+    return;
   }
+
+  try {
+    // Load initial data
+    const [homeInfo, roomInfo, devices] = await Promise.all([
+      fetchHomeInfo(homeID),
+      fetchRoomInfo(roomID),
+      fetchRoomDevices(roomID)
+    ]);
+
+    // Update UI
+    updateLocationInfo(homeInfo, roomInfo);
+    renderDashboard(devices);
+    setupChartSection(devices);
+    
+    // Start polling for updates
+    startDevicePolling(roomID);
+  } catch (error) {
+    console.error("Initialization failed:", error);
+  }
+}
+
+/**
+ * Render the main device dashboard
+ */
+function renderDashboard(devices) {
+  const container = document.getElementById("dashboard-container");
+  container.innerHTML = '';
+
+  devices.forEach(device => {
+    const controlType = determineControlType(device);
+    const card = createDeviceCard(device, controlType);
+    container.appendChild(card);
+  });
+
+  setupControlListeners();
+}
+
+/**
+ * Create a device card element
+ */
+function createDeviceCard(device, controlType) {
+  const card = document.createElement("div");
+  card.className = "monitor-card col-auto";
+  card.style.position = "relative";
+
+  const iconSrc = getDeviceIcon(device);
+  const controlElement = createControlElement(device, controlType);
+
+  card.innerHTML = `
+    <button class="btn btn-danger btn-sm" style="position: absolute; top: 5px; right: 5px;" 
+            onclick="deleteDevice(${device.deviceID})">
+      <i class="fas fa-trash-alt"></i>
+    </button>
+    <img src="../images/${iconSrc}" alt="${device.deviceName}" class="monitor-icon" />
+    <h3>${device.deviceName}</h3>
+    <div id="device-${device.deviceID}" class="device-value mt-3">
+      ${controlElement}
+    </div>
+  `;
+
+  return card;
+}
+
+/**
+ * Determine the control type for a device
+ */
+function determineControlType(device) {
+  if (device.deviceName.toLowerCase().includes("cảm biến")) {
+    return DeviceControlType.NONE;
+  }
+  
+  if (device.feedName.toLowerCase() === 'quat') {
+    return DeviceControlType.SLIDER;
+  }
+  
+  if (device.type === 'non-numeric') {
+    return DeviceControlType.TOGGLE;
+  }
+  
+  return DeviceControlType.BUTTON;
+}
+
+/**
+ * Create the appropriate control element
+ */
+function createControlElement(device, controlType) {
+  switch (controlType) {
+    case DeviceControlType.TOGGLE:
+      return createToggleControl(device);
+    case DeviceControlType.SLIDER:
+      return createFanSlider(device);
+    case DeviceControlType.BUTTON:
+      return createAdjustButton(device);
+    default:
+      return `<div class="value-display">${device.lastValue || '--'}</div>`;
+  }
+}
+
+function createToggleControl(device) {
+  const isOn = device.lastValue === 'ON' || device.lastValue === '1';
+  return `
+    <div class="toggle-control">
+      <label class="switch">
+        <span class="toggle-status">${isOn ? 'ON' : 'OFF'}</span>
+        <input type="checkbox" ${isOn ? 'checked' : ''}
+               data-device-id="${device.deviceID}"
+               data-feed-name="${device.feedName}">
+        <span class="slider round"></span>
+      </label>
+    </div>
+  `;
+}
+
+function createFanSlider(device) {
+  const value = parseInt(device.lastValue) || 0;
+  return `
+    <div class="slider-control">
+      <input type="range" min="0" max="100" value="${value}"
+             data-device-id="${device.deviceID}"
+             data-feed-name="${device.feedName}">
+      <output>${value}%</output>
+    </div>
+  `;
+}
+
+function createAdjustButton(device) {
+  return `
+    <div class="adjust-control">
+      <span class="value-display">${device.lastValue || '--'}</span><br>
+      <button class="btn btn-primary btn-sm" 
+              onclick="showAdjustPrompt(${device.deviceID}, '${device.feedName}')">
+        <i class="fas fa-cogs"></i> Điều chỉnh
+      </button>
+    </div>
+  `;
+}
+
+// ======================
+// Event Handlers
+// ======================
+
+function setupControlListeners() {
+  // Toggle switches
+  document.querySelectorAll('.toggle-control input').forEach(toggle => {
+    toggle.addEventListener('change', handleToggleChange);
+  });
+
+  // Fan sliders
+  document.querySelectorAll('.slider-control input').forEach(slider => {
+    slider.addEventListener('input', handleSliderInput);
+  });
+}
+
+async function handleToggleChange(event) {
+  const toggle = event.target;
+  const deviceID = toggle.dataset.deviceId;
+  const feedName = toggle.dataset.feedName;
+  const newValue = toggle.checked ? 'ON' : 'OFF';
+  
+  // Update UI immediately
+  toggle.nextElementSibling.textContent = newValue;
+  
+  try {
+    await controlDevice(deviceID, feedName, newValue);
+  } catch (error) {
+    console.error("Toggle control failed:", error);
+    toggle.checked = !toggle.checked;
+    toggle.nextElementSibling.textContent = toggle.checked ? 'ON' : 'OFF';
+  }
+}
+
+async function handleSliderInput(event) {
+  const slider = event.target;
+  const output = slider.nextElementSibling;
+  const value = slider.value;
+  
+  // Update UI immediately
+  output.textContent = `${value}%`;
+  
+  // Debounce the API call
+  clearTimeout(slider.debounceTimer);
+  slider.debounceTimer = setTimeout(async () => {
+    try {
+      await controlDevice(
+        slider.dataset.deviceId,
+        slider.dataset.feedName,
+        value
+      );
+    } catch (error) {
+      console.error("Slider control failed:", error);
+    }
+  }, 300);
+}
+
+async function showAdjustPrompt(deviceID, feedName) {
+  const command = prompt("Nhập lệnh điều chỉnh:");
+  if (command) {
+    try {
+      await controlDevice(deviceID, feedName, command);
+    } catch (error) {
+      console.error("Adjust failed:", error);
+      alert("Điều chỉnh thất bại");
+    }
+  }
+}
+
+// ======================
+// Device Control
+// ======================
+
+async function controlDevice(deviceID, feedName, command) {
+  const userID = localStorage.getItem("userID");
+  if (!userID) throw new Error("User not authenticated");
+
+  const response = await fetch(`${API_BASE_URL}/device/${deviceID}/control`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ 
+      command,
+      user_id: parseInt(userID),
+      feed_name: feedName
+    })
+  });
+
+  if (!response.ok) {
+    const result = await response.json();
+    throw new Error(result.detail || "Control failed");
+  }
+}
+
+async function deleteDevice(deviceID) {
+  if (!confirm("Bạn có chắc chắn muốn xóa thiết bị này?")) return;
+  
+  const userID = localStorage.getItem("userID");
+  if (!userID) {
+    alert("Vui lòng đăng nhập lại");
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/device/${deviceID}/delete?user_id=${userID}`, {
+      method: "DELETE"
+    });
+
+    if (!response.ok) {
+      const result = await response.json();
+      throw new Error(result.detail || "Delete failed");
+    }
+
+    // Refresh the dashboard
+    const roomID = localStorage.getItem("activeRoomID");
+    const devices = await fetchRoomDevices(roomID);
+    renderDashboard(devices);
+  } catch (error) {
+    console.error("Delete failed:", error);
+    alert("Xóa thiết bị thất bại");
+  }
+}
+
+// ======================
+// Device Registration
+// ======================
+document.getElementById("registerDeviceForm").addEventListener("submit", async function(event) {
+  event.preventDefault();
+  
+  const deviceName = document.getElementById("deviceName").value.trim();
+  const deviceType = document.getElementById("deviceType").value;
+  const feedName = document.getElementById("feedName").value.trim();
+  const userID = localStorage.getItem("userID");
+  const roomID = localStorage.getItem("activeRoomID");
+
+  // Validation
+  if (!deviceName || !deviceType || !feedName) {
+    showFeedback("Vui lòng nhập đầy đủ thông tin", true);
+    return;
+  }
+  if (!userID) {
+    showFeedback("Vui lòng đăng nhập lại", true);
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/room/${roomID}/device_register?user_id=${userID}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceName, type: deviceType, feedName })
+    });
+
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || "Registration failed");
+
+    showFeedback("Đăng ký thiết bị thành công", false);
+    
+    // Refresh the dashboard
+    const devices = await fetchRoomDevices(roomID);
+    renderDashboard(devices);
+    setupChartSection(devices);
+  } catch (error) {
+    console.error("Registration failed:", error);
+    showFeedback(error.message || "Đăng ký thất bại", true);
+  }
+});
+
+function showFeedback(message, isError) {
+  const feedback = document.getElementById("deviceFeedback");
+  feedback.textContent = message;
+  feedback.className = `alert ${isError ? 'alert-danger' : 'alert-success'}`;
+  feedback.style.display = 'block';
+  
+  setTimeout(() => {
+    feedback.style.display = 'none';
+  }, 5000);
+}
+
+// ======================
+// Data Fetching
+// ======================
+
+async function fetchRoomDevices(roomID) {
+  const response = await fetch(`${API_BASE_URL}/room/${roomID}/devices`);
+  if (!response.ok) throw new Error("Failed to fetch devices");
+  return await response.json();
 }
 
 async function fetchHomeInfo(homeID) {
-  try {
-    const response = await fetch(`http://127.0.0.1:8000/home/${homeID}`);
-    if (!response.ok) throw new Error("Failed to fetch home info");
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching home info:", error);
-    return null;
-  }
+  const response = await fetch(`${API_BASE_URL}/home/${homeID}`);
+  if (!response.ok) throw new Error("Failed to fetch home info");
+  return await response.json();
 }
 
 async function fetchRoomInfo(roomID) {
-  try {
-    const response = await fetch(`http://127.0.0.1:8000/room/${roomID}`);
-    if (!response.ok) throw new Error("Failed to fetch room info");
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching room info:", error);
-    return null;
+  const response = await fetch(`${API_BASE_URL}/room/${roomID}`);
+  if (!response.ok) throw new Error("Failed to fetch room info");
+  return await response.json();
+}
+
+async function updateDeviceValues(devices) {
+  const updatePromises = devices.map(async device => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/device/${device.deviceID}/data/last`);
+      if (!response.ok) return;
+      
+      const data = await response.json();
+      updateDeviceDisplay(device.deviceID, data.value);
+    } catch (error) {
+      console.error(`Update failed for device ${device.deviceID}:`, error);
+    }
+  });
+
+  await Promise.all(updatePromises);
+}
+
+function updateDeviceDisplay(deviceID, value) {
+  const display = document.getElementById(`device-${deviceID}`);
+  if (!display) return;
+
+  // Check if this is a controlled device
+  const toggle = display.querySelector('.toggle-control input');
+  const slider = display.querySelector('.slider-control input');
+  
+  if (toggle) {
+    const isOn = value === 'ON' || value === '1';
+    toggle.checked = isOn;
+    toggle.nextElementSibling.textContent = isOn ? 'ON' : 'OFF';
+  } 
+  else if (slider) {
+    slider.value = parseInt(value) || 0;
+    slider.nextElementSibling.textContent = `${slider.value}%`;
+  }
+  else {
+    const valueDisplay = display.querySelector('.value-display');
+    if (valueDisplay) {
+      valueDisplay.textContent = value || '--';
+    }
   }
 }
 
-// -------------------------
-// Hàm tạo giao diện
-// -------------------------
-function createDashboard(devices) {
-  const dashboardContainer = document.getElementById("dashboard-container");
-  dashboardContainer.innerHTML = "";
+// ======================
+// Chart Functions
+// ======================
 
-  devices.forEach(device => {
-    const card = document.createElement("div");
-    card.className = "monitor-card col-auto";
-    card.style.position = "relative"; // Cho phép vị trí con tuyệt đối
+function setupChartSection(devices) {
+  const section = document.getElementById("chart-section");
+  section.innerHTML = "<h4 class='text-center'>Biểu đồ các thiết bị Numeric</h4>";
 
-    let iconSrc = "";
-    let title = device.deviceName || "Thiết bị";
-
-    // Tùy chỉnh icon dựa trên loại và tên thiết bị
-    if (device.type === "numeric") {
-      if (device.deviceName.toLowerCase().includes("nhiệt độ")) {
-        iconSrc = "../images/nhietdo.png";
-      } else if (device.deviceName.toLowerCase().includes("độ ẩm")) {
-        iconSrc = "../images/doam.png";
-      } else if (device.deviceName.toLowerCase().includes("quạt")) {
-        iconSrc = "../images/fan.png";
-      } else if (device.deviceName.toLowerCase().includes("ánh sáng")) {
-        iconSrc = "../images/anhsang.png";
-      } else {
-        iconSrc = "../images/default.png";
-      }
-    } else {
-      if (device.deviceName.toLowerCase().includes("đèn")) {
-        iconSrc = "../images/led.png";
-      } else if (device.deviceName.toLowerCase().includes("cửa")) {
-        iconSrc = "../images/door.png";
-      } else {
-        iconSrc = "../images/default.png";
-      }
-    }
-
-    // Nút xóa đặt ở góc bên phải phía trên
-    const deleteButton = `<button class="btn btn-danger btn-sm" style="position: absolute; top: 5px; right: 5px;" onclick="deleteDevice(${device.deviceID})">
-                              <i class="fas fa-trash-alt"></i>
-                           </button>`;
-
-    // Nút điều chỉnh: chỉ hiển thị nếu tên thiết bị không chứa "cảm biến"
-    let controlButton = "";
-    if (!device.deviceName.toLowerCase().includes("cảm biến")) {
-      controlButton = `<button class="btn btn-primary btn-sm mt-2" onclick="controlDevice(${device.deviceID})">
-                           <i class="fas fa-cogs"></i> Điều chỉnh
-                        </button>`;
-    }
-
-    card.innerHTML = `
-      ${deleteButton}
-      <img src="${iconSrc}" alt="${title}" class="monitor-icon" />
-      <h3>${title}</h3>
-      <h1 id="device-${device.deviceID}" class="mt-4" style="font-size:1.5rem">--</h1>
-      <div class="mt-2">
-        ${controlButton}
-      </div>
-    `;
-    dashboardContainer.appendChild(card);
-  });
+  devices
+    .filter(device => device.type === "numeric")
+    .forEach(device => {
+      const container = document.createElement("div");
+      container.className = "chart-container mb-3";
+      container.innerHTML = `<canvas id="chart-${device.deviceID}"></canvas>`;
+      section.appendChild(container);
+      renderDeviceChart(device);
+    });
 }
 
-function createChartSection(devices) {
-  const chartSection = document.getElementById("chart-section");
-  chartSection.innerHTML = "<h4 class='text-center'>Biểu đồ các thiết bị Numeric</h4>";
-
-  // Lọc các thiết bị numeric
-  const numericDevices = devices.filter(device => device.type === "numeric");
-  numericDevices.forEach(device => {
-    const container = document.createElement("div");
-    container.className = "chart-container mb-3";
-    container.innerHTML = `<canvas id="chart-device-${device.deviceID}"></canvas>`;
-    chartSection.appendChild(container);
-  });
-}
-
-// -------------------------
-// Hàm cập nhật dữ liệu và vẽ chart
-// -------------------------
-async function updateNumericDeviceValue(device) {
-  const url = `http://127.0.0.1:8000/device/${device.deviceID}/data/last`;
+async function renderDeviceChart(device) {
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch numeric data for ${device.feedName}`);
-    }
+    const response = await fetch(`${API_BASE_URL}/device/${device.deviceID}/data/history?limit=20`);
+    if (!response.ok) return;
+    
     const data = await response.json();
-    document.getElementById(`device-${device.deviceID}`).textContent = data.value;
-  } catch (error) {
-    console.error("Error updating numeric device value:", error);
-    document.getElementById(`device-${device.deviceID}`).textContent = "--";
-  }
-}
+    if (!data.length) return;
 
-async function drawChartForDevice(device) {
-  const url = `http://127.0.0.1:8000/device/${device.deviceID}/data/history?limit=20`;
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch history for feed ${device.feedName}`);
-    }
-    const dataArray = await response.json();
-    if (!dataArray || dataArray.length === 0) return;
-
-    dataArray.reverse();
-    const labels = dataArray.map(d => d.created_at ? d.created_at.substring(11, 16) : "unknown");
-    const values = dataArray.map(d => parseFloat(d.value));
-
-    const canvas = document.getElementById(`chart-device-${device.deviceID}`);
-    if (!canvas) {
-      console.error(`Canvas for device ${device.deviceID} not found.`);
-      return;
-    }
-    const ctx = canvas.getContext("2d");
+    const ctx = document.getElementById(`chart-${device.deviceID}`).getContext('2d');
+    
     charts[device.deviceID] = new Chart(ctx, {
-      type: "line",
+      type: 'line',
       data: {
-        labels: labels,
+        labels: data.reverse().map(d => d.created_at?.substring(11, 16) || ''),
         datasets: [{
           label: device.deviceName,
-          data: values,
-          borderColor: "rgba(75,192,192,1)",
-          backgroundColor: "rgba(75,192,192,0.2)",
-          fill: true,
+          data: data.map(d => parseFloat(d.value)),
+          borderColor: 'rgba(75, 192, 192, 1)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
           tension: 0.3
         }]
       },
       options: {
         responsive: true,
-        maintainAspectRatio: false,
         plugins: {
           title: {
             display: true,
-            text: `Lịch sử ${device.deviceName}`,
-            font: { size: 18 }
+            text: `Lịch sử ${device.deviceName}`
           }
         },
         scales: {
-          x: {
-            title: { display: true, text: "Thời gian", font: { size: 14 } },
-            ticks: { font: { size: 12 } }
-          },
-          y: {
-            title: { display: true, text: "Giá trị", font: { size: 14 } },
-            ticks: { font: { size: 12 } }
-          }
+          x: { title: { display: true, text: 'Thời gian' } },
+          y: { title: { display: true, text: 'Giá trị' } }
         }
       }
     });
   } catch (error) {
-    console.error("Error drawing chart for device", device.deviceID, error);
+    console.error(`Chart render failed for device ${device.deviceID}:`, error);
   }
 }
 
-async function updateNonNumericDevice(device) {
-  const url = `http://127.0.0.1:8000/device/${device.deviceID}/data/last`;
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch non-numeric data for ${device.feedName}`);
+// ======================
+// Utility Functions
+// ======================
+
+function updateLocationInfo(homeInfo, roomInfo) {
+  const homeSpan = document.getElementById("home-info");
+  const roomSpan = document.getElementById("room-info");
+  
+  if (homeInfo?.address) homeSpan.textContent = `Nhà: ${homeInfo.address}`;
+  if (roomInfo?.nameRoom) roomSpan.textContent = `Phòng: ${roomInfo.nameRoom}`;
+}
+
+function getDeviceIcon(device) {
+  const name = device.deviceName.toLowerCase();
+  if (name.includes("nhiệt độ")) return 'nhietdo.png';
+  if (name.includes("độ ẩm")) return 'doam.png';
+  if (name.includes("ánh sáng")) return 'anhsang.png';
+  if (name.includes("quạt")) return 'fan.png';
+  if (name.includes("đèn")) return 'led.png';
+  if (name.includes("cửa")) return 'door.png';
+  return 'default.png';
+}
+
+function startDevicePolling(roomID) {
+  setInterval(async () => {
+    try {
+      const devices = await fetchRoomDevices(roomID);
+      await updateDeviceValues(devices);
+    } catch (error) {
+      console.error("Polling error:", error);
     }
-    const data = await response.json();
-    document.getElementById(`device-${device.deviceID}`).textContent = data.value;
-  } catch (error) {
-    console.error("Error updating non-numeric device:", error);
-    document.getElementById(`device-${device.deviceID}`).textContent = "--";
-  }
+  }, POLLING_INTERVAL);
 }
 
-async function updateAllDeviceValues(devices) {
-  for (const device of devices) {
-    if (device.type === "numeric") {
-      await updateNumericDeviceValue(device);
-    } else {
-      await updateNonNumericDevice(device);
-    }
-  }
-}
-
-async function drawChartsForNumericDevices(devices) {
-  const numericDevices = devices.filter(device => device.type === "numeric");
-  for (const device of numericDevices) {
-    await drawChartForDevice(device);
-  }
-}
-
-// -------------------------
-// Hàm điều chỉnh thiết bị
-// -------------------------
-async function controlDevice(deviceID) {
-  const command = prompt("Nhập lệnh điều chỉnh (ví dụ: ON hoặc OFF):");
-  if (!command) return;
-
-  const userID = localStorage.getItem("userID");
-  if (!userID) {
-    alert("Không xác định được user. Vui lòng đăng nhập lại.");
-    return;
-  }
-
-  try {
-    const response = await fetch(`http://127.0.0.1:8000/device/${deviceID}/control`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command: command, user_id: parseInt(userID) })
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      alert(result.detail || "Điều chỉnh thiết bị thất bại.");
-      return;
-    }
-    alert("Điều chỉnh thiết bị thành công!");
-  } catch (error) {
-    console.error("Error controlling device:", error);
-    alert("Có lỗi xảy ra khi điều chỉnh thiết bị.");
-  }
-}
-
-// -------------------------
-// Hàm xóa thiết bị
-// -------------------------
-async function deleteDevice(deviceID) {
-  if (!confirm("Bạn có chắc chắn muốn xóa thiết bị này?")) return;
-  const userID = localStorage.getItem("userID");
-  if (!userID) {
-    alert("Không xác định được user. Vui lòng đăng nhập lại.");
-    return;
-  }
-  try {
-    const response = await fetch(`http://127.0.0.1:8000/device/${deviceID}/delete?user_id=${userID}`, {
-      method: "DELETE"
-    });
-    if (!response.ok) {
-      const result = await response.json();
-      alert(result.detail || "Xóa thiết bị thất bại.");
-      return;
-    }
-    alert("Xóa thiết bị thành công!");
-    const devices = await fetchRoomDevices(roomID);
-    createDashboard(devices);
-    drawChartsForNumericDevices(devices);
-  } catch (error) {
-    console.error("Error deleting device:", error);
-    alert("Có lỗi xảy ra khi xóa thiết bị.");
-  }
-}
-
-
-// -------------------------
-// Hàm đăng ký thiết bị mới
-// -------------------------
-document.getElementById("registerDeviceForm").addEventListener("submit", async function (event) {
-  event.preventDefault();
-
-  const deviceName = document.getElementById("deviceName").value.trim();
-  const deviceType = document.getElementById("deviceType").value;
-  const feedName = document.getElementById("feedName").value.trim();
-
-  if (!deviceName || !deviceType || !feedName) {
-    showDeviceFeedback("Vui lòng nhập đầy đủ thông tin.", true);
-    return;
-  }
-
-  const userID = localStorage.getItem("userID");
-  if (!userID) {
-    showDeviceFeedback("Không xác định được user. Vui lòng đăng nhập lại.", true);
-    return;
-  }
-
-  const payload = { deviceName, type: deviceType, feedName };
-
-  try {
-    const response = await fetch(`http://127.0.0.1:8000/room/${roomID}/device_register?user_id=${userID}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      showDeviceFeedback(result.detail || "Đăng ký thiết bị thất bại.", true);
-      return;
-    }
-    showDeviceFeedback(result.message, false);
-    // Reload lại danh sách thiết bị
-    const devices = await fetchRoomDevices(roomID);
-    createDashboard(devices);
-    createChartSection(devices);
-    updateAllDeviceValues(devices);
-    drawChartsForNumericDevices(devices);
-  } catch (error) {
-    console.error("Error registering device:", error);
-    showDeviceFeedback("Có lỗi xảy ra, vui lòng thử lại sau.", true);
-  }
-});
-
-// Hàm hiển thị feedback cho đăng ký thiết bị
-function showDeviceFeedback(message, isError = true) {
-  const feedbackDiv = document.getElementById("deviceFeedback");
-  feedbackDiv.classList.remove("feedback-error", "feedback-success");
-  feedbackDiv.classList.add(isError ? "feedback-error" : "feedback-success");
-  feedbackDiv.textContent = message;
-  feedbackDiv.style.display = "block";
-  setTimeout(() => {
-    feedbackDiv.style.display = "none";
-  }, 5000);
-}
-
-// -------------------------
-// Main: Khi trang load, cập nhật giao diện
-// -------------------------
-document.addEventListener("DOMContentLoaded", async () => {
-  if (!roomID || !homeID) {
-    console.error("Không xác định được phòng hoặc nhà. Vui lòng chọn lại.");
-    return;
-  }
-
-  // Cập nhật thông tin vị trí
-  const homeInfo = await fetchHomeInfo(homeID);
-  const roomInfo = await fetchRoomInfo(roomID);
-
-  const homeInfoSpan = document.getElementById("home-info");
-  const roomInfoSpan = document.getElementById("room-info");
-  if (homeInfo && homeInfo.address) {
-    homeInfoSpan.textContent = `Nhà: ${homeInfo.address}`;
-  }
-  if (roomInfo && roomInfo.nameRoom) {
-    roomInfoSpan.textContent = `Phòng: ${roomInfo.nameRoom}`;
-  }
-
-  // Tải danh sách thiết bị, hiển thị dashboard, chart và cập nhật giá trị
-  const devices = await fetchRoomDevices(roomID);
-  createDashboard(devices);
-  createChartSection(devices);
-  updateAllDeviceValues(devices);
-  drawChartsForNumericDevices(devices);
-  setInterval(() => updateAllDeviceValues(devices), 5000);
-});
+// ======================
+// Initialization
+// ======================
+document.addEventListener("DOMContentLoaded", initializeDashboard);
