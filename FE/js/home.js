@@ -43,7 +43,7 @@ function displayHomeList(homes) {
 
   homes.forEach(home => {
       const col = document.createElement("div");
-      col.className = "col-md-4";
+      col.className = "col-md-5";
       col.innerHTML = `
           <div class="house-card position-relative">
               <button class="btn btn-danger position-absolute top-0 end-0 m-2" onclick="deleteHome(${home.homeID})">

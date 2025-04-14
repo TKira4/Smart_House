@@ -483,12 +483,13 @@ function updateLocationInfo(homeInfo, roomInfo) {
 
 function getDeviceIcon(device) {
   const name = device.deviceName.toLowerCase();
-  if (name.includes("nhiệt độ")) return 'nhietdo.png';
-  if (name.includes("độ ẩm")) return 'doam.png';
-  if (name.includes("ánh sáng")) return 'anhsang.png';
-  if (name.includes("quạt")) return 'fan.png';
-  if (name.includes("đèn")) return 'led.png';
-  if (name.includes("cửa")) return 'door.png';
+  if (name.includes("nhiệt độ") || name.includes("nhiet do")) return 'nhietdo.png';
+  if (name.includes("độ ẩm") || name.includes("do am")) return 'doam.png';
+  if (name.includes("ánh sáng") || name.includes("anh sang")) return 'anhsang.png';
+  if (name.includes("quạt") || name.includes("quat")) return 'fan2.png';
+  if (name.includes("đèn") || name.includes("den")) return 'led.png';
+  if (name.includes("cửa") || name.includes("cua")) return 'door.png';
+  if (name.includes("bơm") || name.includes("bom")) return 'maybom.png';
   return 'default.png';
 }
 
