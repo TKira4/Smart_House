@@ -418,7 +418,7 @@ function setupChartSection(devices) {
   section.innerHTML = "<h4 class='text-center'>Biểu đồ các thiết bị Numeric</h4>";
 
   devices
-    .filter(device => device.type === "numeric")
+    .filter(device => device.type === "numeric" && !["quat", "admin", "mat-khau", "mauled"].includes(device.feedName.toLowerCase()))
     .forEach(device => {
       const container = document.createElement("div");
       container.className = "chart-container mb-3";
