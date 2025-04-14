@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   // Fetch thiết bị của phòng
   const devices = await fetchRoomDevices(roomID);
-  const sensorDevices = devices.filter(device =>
+  const sensorDevices = devices.filter((device) =>
     device.deviceName.toLowerCase().includes("cảm biến")
   );
   createSettingsCards(sensorDevices);
@@ -60,7 +60,9 @@ async function fetchRoomInfo(roomID) {
 // Hàm fetch thiết bị của phòng từ API
 async function fetchRoomDevices(roomID) {
   try {
-    const response = await fetch(`http://127.0.0.1:8000/room/${roomID}/devices`);
+    const response = await fetch(
+      `http://127.0.0.1:8000/room/${roomID}/devices`
+    );
     if (!response.ok) {
       throw new Error("Failed to fetch devices");
     }
@@ -72,6 +74,7 @@ async function fetchRoomDevices(roomID) {
     return [];
   }
 }
+
 
 // Hàm tạo card cài đặt threshold cho thiết bị sensor
 function createSettingsCards(devices) {
@@ -86,39 +89,51 @@ function createSettingsCards(devices) {
   const rowDiv = document.createElement("div");
   rowDiv.className = "sensor-card-container";
 
-  devices.forEach(device => {
+  devices.forEach((device) => {
     const card = document.createElement("div");
     card.className = "monitor-card";
     card.style.position = "relative";
 
-    // Tùy chỉnh icon dựa trên tên thiết bị
     let iconSrc = "../images/default.png";
+    let unit = ""; // <-- Đơn vị mặc định rỗng
     const lowerName = device.deviceName.toLowerCase();
+
+    // Xác định icon và đơn vị
     if (lowerName.includes("nhiệt độ")) {
       iconSrc = "../images/nhietdo.png";
+      unit = "°C";
     } else if (lowerName.includes("độ ẩm")) {
       iconSrc = "../images/doam.png";
+      unit = "%";
     } else if (lowerName.includes("ánh sáng")) {
       iconSrc = "../images/anhsang.png";
+      unit = "DC";
     } else if (lowerName.includes("cảm biến")) {
       iconSrc = "../images/cambien.png";
     }
 
     const deleteButton = `<button class="btn btn-danger btn-sm" style="position: absolute; top:5px; right:5px;" onclick="deleteDevice(${device.deviceID})">
-                              <i class="fas fa-trash-alt"></i>
-                            </button>`;
+                            <i class="fas fa-trash-alt"></i>
+                          </button>`;
 
-    const currentThreshold = (device.threshold !== undefined && device.threshold !== null)
-                              ? device.threshold 
-                              : "Chưa cài đặt";
+    const currentThreshold =
+      device.threshold !== undefined && device.threshold !== null
+        ? `${device.threshold} ${unit}` // <-- Thêm đơn vị ở đây
+        : "Chưa cài đặt";
 
     card.innerHTML = `
       ${deleteButton}
       <img src="${iconSrc}" alt="${device.deviceName}" class="monitor-icon" />
-      <h3>${device.deviceName}</h3>
-      <p>Ngưỡng hiện tại: <span id="current-threshold-${device.deviceID}">${currentThreshold}</span></p>
-      <input type="number" class="form-control" id="input-threshold-${device.deviceID}" placeholder="Nhập ngưỡng mới" />
-      <button class="btn btn-success btn-sm mt-2" onclick="updateThreshold(${device.deviceID})">
+      <h3>${toProperCase(device.deviceName)}</h3>
+      <p>Ngưỡng hiện tại: <span id="current-threshold-${
+        device.deviceID
+      }">${currentThreshold}</span></p>
+      <input type="number" class="form-control" id="input-threshold-${
+        device.deviceID
+      }" placeholder="Nhập ngưỡng mới" />
+      <button class="btn btn-success btn-sm mt-2" onclick="updateThreshold(${
+        device.deviceID
+      }, '${unit}')">
         Cập nhật
       </button>
     `;
@@ -131,7 +146,7 @@ function createSettingsCards(devices) {
 
 
 // Hàm cập nhật threshold cho một thiết bị (sử dụng body JSON, truyền user_id)
-async function updateThreshold(deviceID) {
+async function updateThreshold(deviceID, unit = "") {
   const input = document.getElementById(`input-threshold-${deviceID}`);
   const newThreshold = parseFloat(input.value);
   if (isNaN(newThreshold)) {
@@ -144,22 +159,27 @@ async function updateThreshold(deviceID) {
     return;
   }
   try {
-    const response = await fetch(`http://127.0.0.1:8000/device/${deviceID}/threshold`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        new_threshold: newThreshold,
-        user_id: parseInt(userID)
-      })
-    });
+    const response = await fetch(
+      `http://127.0.0.1:8000/device/${deviceID}/threshold`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          new_threshold: newThreshold,
+          user_id: parseInt(userID),
+        }),
+      }
+    );
     const result = await response.json();
     if (!response.ok) {
       alert(result.detail || "Cập nhật ngưỡng thất bại.");
       return;
     }
-    document.getElementById(`current-threshold-${deviceID}`).textContent = newThreshold;
+    document.getElementById(
+      `current-threshold-${deviceID}`
+    ).textContent = `${newThreshold} ${unit}`; // Gán lại có đơn vị
     alert("Cập nhật ngưỡng thành công!");
   } catch (error) {
     console.error("Error updating threshold:", error);
@@ -167,14 +187,16 @@ async function updateThreshold(deviceID) {
   }
 }
 
-
 // Hàm xóa thiết bị
 async function deleteDevice(deviceID) {
   if (!confirm("Bạn có chắc chắn muốn xóa thiết bị này?")) return;
   try {
-    const response = await fetch(`http://127.0.0.1:8000/device/${deviceID}/delete`, {
-      method: "DELETE"
-    });
+    const response = await fetch(
+      `http://127.0.0.1:8000/device/${deviceID}/delete`,
+      {
+        method: "DELETE",
+      }
+    );
     if (!response.ok) {
       const result = await response.json();
       alert(result.detail || "Xóa thiết bị thất bại.");
@@ -185,7 +207,9 @@ async function deleteDevice(deviceID) {
     const roomID = localStorage.getItem("activeRoomID");
     const devices = await fetchRoomDevices(roomID);
     // Lọc các thiết bị cảm biến
-    const sensorDevices = devices.filter(device => device.deviceName.toLowerCase().includes("cảm biến"));
+    const sensorDevices = devices.filter((device) =>
+      device.deviceName.toLowerCase().includes("cảm biến")
+    );
     createSettingsCards(sensorDevices);
   } catch (error) {
     console.error("Error deleting device:", error);
@@ -196,7 +220,9 @@ async function deleteDevice(deviceID) {
 // Fetch lịch sử hành động
 async function fetchActionLogs(userID) {
   try {
-    const response = await fetch(`http://127.0.0.1:8000/action_logs?user_id=${userID}`);
+    const response = await fetch(
+      `http://127.0.0.1:8000/action_logs?user_id=${userID}`
+    );
     if (!response.ok) {
       throw new Error("Failed to fetch action logs");
     }
@@ -207,22 +233,34 @@ async function fetchActionLogs(userID) {
   }
 }
 
-// Hiển thị lịch sử hành động
+// Hiển thị lịch sử hành động <!-- UYEN UPDATE 13/04 -->
 function populateActionLogs(logs) {
-  const tableBody = document.getElementById("actionLogTable").querySelector("tbody");
+  const tableBody = document
+    .getElementById("actionLogTable")
+    .querySelector("tbody");
   tableBody.innerHTML = "";
+
   if (!logs.length) {
-    tableBody.innerHTML = "<tr><td colspan='5'>Không có lịch sử hành động nào.</td></tr>";
+    tableBody.innerHTML =
+      "<tr><td colspan='5'>Không có lịch sử hành động nào.</td></tr>";
     return;
   }
-  logs.forEach(log => {
+
+  logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  logs.forEach((log) => {
+    const formattedDeviceName = log.deviceName
+      ? toProperCase(log.deviceName)
+      : "-";
+    const formattedTime = formatTimestamp(log.timestamp);
+
     tableBody.innerHTML += `
       <tr>
         <td>${log.actionID}</td>
         <td>${log.userID}</td>
-        <td>${log.deviceName || "-"}</td>
+        <td>${formattedDeviceName}</td>
         <td>${log.actionType}</td>
-        <td>${log.timestamp}</td>
+        <td>${formattedTime}</td>
       </tr>
     `;
   });
@@ -231,7 +269,9 @@ function populateActionLogs(logs) {
 // Fetch lịch sử cảnh báo
 async function fetchAlertLogs(userID) {
   try {
-    const response = await fetch(`http://127.0.0.1:8000/alert_logs?user_id=${userID}`);
+    const response = await fetch(
+      `http://127.0.0.1:8000/alert_logs?user_id=${userID}`
+    );
     if (!response.ok) {
       throw new Error("Failed to fetch alert logs");
     }
@@ -242,15 +282,24 @@ async function fetchAlertLogs(userID) {
   }
 }
 
-// Hiển thị lịch sử cảnh báo
+// Hiển thị lịch sử cảnh báo <!-- UYEN UPDATE 13/04 -->
 function populateAlertLogs(logs) {
-  const tableBody = document.getElementById("alertLogTable").querySelector("tbody");
+  const tableBody = document
+    .getElementById("alertLogTable")
+    .querySelector("tbody");
   tableBody.innerHTML = "";
   if (!logs.length) {
-    tableBody.innerHTML = "<tr><td colspan='6'>Không có lịch sử cảnh báo nào.</td></tr>";
+    tableBody.innerHTML =
+      "<tr><td colspan='6'>Không có lịch sử cảnh báo nào.</td></tr>";
     return;
   }
-  logs.forEach(log => {
+  logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  logs.forEach((log) => {
+    const formattedDeviceName = log.deviceName
+      ? toProperCase(log.deviceName)
+      : "-";
+    const formattedTime = formatTimestamp(log.timestamp);
+
     tableBody.innerHTML += `
       <tr>
         <td>${log.alertID}</td>
@@ -263,3 +312,28 @@ function populateAlertLogs(logs) {
     `;
   });
 }
+
+/* UYEN UPDATE 13 APR */
+// Viết hoa chữ cái đầu của từng từ
+function toProperCase(str) {
+  return str.replace(
+    /\w\S*/g,
+    (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase()
+  );
+}
+
+// Format timestamp thành dạng dd/mm/yyyy hh:mm:ss
+function formatTimestamp(isoString) {
+  const date = new Date(isoString);
+  const pad = (num) => (num < 10 ? "0" + num : num);
+  return (
+    `${pad(date.getDate())}/${pad(
+      date.getMonth() + 1
+    )}/${date.getFullYear()} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(
+      date.getSeconds()
+    )}`
+  );
+}
+
+
