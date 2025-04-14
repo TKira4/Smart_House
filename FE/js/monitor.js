@@ -486,9 +486,9 @@ function getDeviceIcon(device) {
   if (name.includes("nhiệt độ") || name.includes("nhiet do")) return 'nhietdo.png';
   if (name.includes("độ ẩm") || name.includes("do am")) return 'doam.png';
   if (name.includes("ánh sáng") || name.includes("anh sang")) return 'anhsang.png';
-  if (name.includes("quạt") || name.includes("quat")) return 'fan2.png';
-  if (name.includes("đèn") || name.includes("den")) return 'led.png';
-  if (name.includes("cửa") || name.includes("cua")) return 'door.png';
+  if (name.includes("quạt") || name.includes("quat") || name.includes("fan")) return 'fan2.png';
+  if (name.includes("đèn") || name.includes("den") || name.includes("led")) return 'led.png';
+  if (name.includes("cửa") || name.includes("cua") || name.includes("door")) return 'door.png';
   if (name.includes("bơm") || name.includes("bom")) return 'maybom.png';
   return 'default.png';
 }
