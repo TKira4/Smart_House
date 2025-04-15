@@ -510,13 +510,15 @@ function updateLocationInfo(homeInfo, roomInfo) {
 
 function getDeviceIcon(device) {
   const name = device.deviceName.toLowerCase();
-  if (name.includes("nhiệt độ") || name.includes("nhiet do")) return 'nhietdo.png';
-  if (name.includes("độ ẩm") || name.includes("do am")) return 'doam.png';
-  if (name.includes("ánh sáng") || name.includes("anh sang")) return 'anhsang.png';
-  if (name.includes("quạt") || name.includes("quat") || name.includes("fan")) return 'fan2.png';
-  if (name.includes("đèn") || name.includes("den") || name.includes("led")) return 'led.png';
-  if (name.includes("cửa") || name.includes("cua") || name.includes("door")) return 'door.png';
-  if (name.includes("bơm") || name.includes("bom") || name.includes("chay") || name.includes("cháy")) return 'maybom.png';
+  const name1 = device.feedName;
+  if (name1.includes("nhietdo") || name.includes("nhiệt độ") || name.includes("nhiet do")) return 'nhietdo.png';
+  if (name1.includes("doam") || name.includes("độ ẩm") || name.includes("do am")) return 'doam.png';
+  if (name1.includes("anhsang") || name.includes("ánh sáng") || name.includes("anh sang")) return 'anhsang.png';
+  if (name1.includes("quat") || name.includes("quạt") || name.includes("quat") || name.includes("fan")) return 'fan2.png';
+  if (name1.includes("led") || name.includes("đèn") || name.includes("den") || name.includes("led")) return 'led.png';
+  if (name1.includes("mat-khau") || name.includes("password") || name.includes("mat khau") || name.includes("mật khẩu")) return 'matkhau.png';
+  if (name1.includes("admin") || name.includes("cửa") || name.includes("cua") || name.includes("door")) return 'door.png';
+  if (name1.includes("canh-cao-chay") || name.includes("bơm") || name.includes("bom") || name.includes("chay") || name.includes("cháy")) return 'maybom.png';
   return 'default.png';
 }
 
