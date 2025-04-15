@@ -516,7 +516,7 @@ function getDeviceIcon(device) {
   if (name.includes("quạt") || name.includes("quat") || name.includes("fan")) return 'fan2.png';
   if (name.includes("đèn") || name.includes("den") || name.includes("led")) return 'led.png';
   if (name.includes("cửa") || name.includes("cua") || name.includes("door")) return 'door.png';
-  if (name.includes("bơm") || name.includes("bom")) return 'maybom.png';
+  if (name.includes("bơm") || name.includes("bom") || name.includes("chay") || name.includes("cháy")) return 'maybom.png';
   return 'default.png';
 }
 
