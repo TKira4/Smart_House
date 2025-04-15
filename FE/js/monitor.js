@@ -126,7 +126,19 @@ function createControlElement(device, controlType) {
     case DeviceControlType.BUTTON:
       return createAdjustButton(device);
     default:
-      return `<div class="value-display">${device.lastValue || '--'}</div>`;
+      // return `<div class="value-display">${device.lastValue || '--'}</div>`;
+      const deviceName = device.feedName;
+      let unit = '';
+      
+      if (deviceName.includes("nhietdo")) {
+        unit = '°C';
+      } else if (deviceName.includes("doam")) {
+        unit = '%';
+      } else if (deviceName.includes("anhsang")) {
+        unit = ' lux';
+      }
+      
+      return `<div class="value-display">${device.lastValue || '--'}${unit}</div>`;
   }
 }
 
@@ -404,7 +416,15 @@ function updateDeviceDisplay(deviceID, value) {
   else {
     const valueDisplay = display.querySelector('.value-display');
     if (valueDisplay) {
-      valueDisplay.textContent = value || '--';
+      // valueDisplay.textContent = value || '--';
+      const currentText = valueDisplay.textContent;
+      let unit = '';
+      
+      if (currentText.includes('°C')) unit = '°C';
+      else if (currentText.includes('%') && !currentText.includes('100%')) unit = '%';
+      else if (currentText.includes('lux')) unit = ' lux';
+      
+      valueDisplay.textContent = (value || '--') + unit;
     }
   }
 }
@@ -460,7 +480,15 @@ async function renderDeviceChart(device) {
         },
         scales: {
           x: { title: { display: true, text: 'Thời gian' } },
-          y: { title: { display: true, text: 'Giá trị' } }
+          y: {
+            title: { 
+              display: true, 
+              text: device.feedName.includes("nhietdo") ? 'Nhiệt độ (°C)' :
+                    device.feedName.includes("doam") ? 'Độ ẩm (%)' :
+                    device.feedName.includes("anhsang") ? 'Ánh sáng (lux)' :
+                    'Giá trị'
+            } 
+          }
         }
       }
     });
