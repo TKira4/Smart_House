@@ -126,10 +126,8 @@ function createControlElement(device, controlType) {
     case DeviceControlType.BUTTON:
       return createAdjustButton(device);
     default:
-      // return `<div class="value-display">${device.lastValue || '--'}</div>`;
       const deviceName = device.feedName;
       let unit = '';
-      
       if (deviceName.includes("nhietdo")) {
         unit = '°C';
       } else if (deviceName.includes("doam")) {
@@ -137,7 +135,6 @@ function createControlElement(device, controlType) {
       } else if (deviceName.includes("anhsang")) {
         unit = ' lux';
       }
-      
       return `<div class="value-display">${device.lastValue || '--'}${unit}</div>`;
   }
 }
@@ -146,8 +143,8 @@ function createToggleControl(device) {
   const isOn = device.lastValue === 'ON' || device.lastValue === '1';
   return `
     <div class="toggle-control">
+      <span class="toggle-status">${isOn ? 'ON' : 'OFF'}</span><br>
       <label class="switch">
-        <span class="toggle-status">${isOn ? 'ON' : 'OFF'}</span>
         <input type="checkbox" ${isOn ? 'checked' : ''}
                data-device-id="${device.deviceID}"
                data-feed-name="${device.feedName}">
@@ -199,19 +196,21 @@ function setupControlListeners() {
 
 async function handleToggleChange(event) {
   const toggle = event.target;
+  const toggleControl = toggle.closest('.toggle-control');
+  const statusText = toggleControl.querySelector('.toggle-status');
   const deviceID = toggle.dataset.deviceId;
   const feedName = toggle.dataset.feedName;
   const newValue = toggle.checked ? 'ON' : 'OFF';
   
   // Update UI immediately
-  toggle.nextElementSibling.textContent = newValue;
+  statusText.textContent = newValue;
   
   try {
     await controlDevice(deviceID, feedName, newValue);
   } catch (error) {
     console.error("Toggle control failed:", error);
     toggle.checked = !toggle.checked;
-    toggle.nextElementSibling.textContent = toggle.checked ? 'ON' : 'OFF';
+    statusText.textContent = toggle.checked ? 'ON' : 'OFF';
   }
 }
 
@@ -401,13 +400,14 @@ function updateDeviceDisplay(deviceID, value) {
   if (!display) return;
 
   // Check if this is a controlled device
-  const toggle = display.querySelector('.toggle-control input');
+  const toggleInput = display.querySelector('.toggle-control input[type="checkbox"]');
+  const toggleStatus = display.querySelector('.toggle-control .toggle-status');
   const slider = display.querySelector('.slider-control input');
   
-  if (toggle) {
+  if (toggleInput && toggleStatus) {
     const isOn = value === 'ON' || value === '1';
-    toggle.checked = isOn;
-    toggle.nextElementSibling.textContent = isOn ? 'ON' : 'OFF';
+    toggleInput.checked = isOn;
+    toggleStatus.textContent = isOn ? 'ON' : 'OFF';
   } 
   else if (slider) {
     slider.value = parseInt(value) || 0;
@@ -416,7 +416,6 @@ function updateDeviceDisplay(deviceID, value) {
   else {
     const valueDisplay = display.querySelector('.value-display');
     if (valueDisplay) {
-      // valueDisplay.textContent = value || '--';
       const currentText = valueDisplay.textContent;
       let unit = '';
       
