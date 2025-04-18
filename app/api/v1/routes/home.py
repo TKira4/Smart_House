@@ -69,6 +69,39 @@ def get_home(home_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Home not found")
     return home
 
+@router.get("/home/{home_id}/status")
+def get_home_safety_status(home_id: int, db: Session = Depends(get_db)):
+    home = db.query(Home).filter(Home.homeID == home_id).first()
+    if not home:
+        raise HTTPException(status_code=404, detail="Home not found")
 
+    is_safe = True
+    reasons = []
+
+    for room in home.rooms:
+        for device in room.devices:
+            if device.value is None:
+                continue
+            value = float(device.value)
+            threshold = device.threshold
+            if device.feedName == "nhietdo" and value > threshold:
+                is_safe = False
+                reasons.append(f"Nhiệt độ cao: {value}°C")
+            elif device.feedName == "doam" and value < 20:
+                if value < 20:
+                    is_safe = False
+                    reasons.append(f"Độ ẩm thấp: {device.value}%")
+                elif value > threshold: 
+                    is_safe = False
+                    reasons.append(f"Độ ẩm cao: {device.value}%")
+            elif device.feedName == "anhsang" and value > threshold:
+                is_safe = False
+                reasons.append(f"Ánh sáng mạnh: {device.value} lux")
+
+    return {
+        "home_id": home_id,
+        "is_safe": is_safe,
+        "reasons": reasons,
+    }
 
 
