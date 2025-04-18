@@ -63,7 +63,6 @@ function displayHomeList(homes) {
       .then(response => response.json())
       .then(status => {
         const statusContainer = col.querySelector(".safety-status");
-
         statusContainer.innerHTML = `
           <div class="d-flex align-items-center gap-1 bg-white rounded px-2 py-1">
             <img src="${status.is_safe ? '../images/safe.png' : '../images/warning.png'}" 
