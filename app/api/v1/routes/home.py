@@ -43,6 +43,31 @@ def register_room(home_id: int, request: RoomRegisterRequest, db: Session = Depe
             "homeID": new_room.homeID
         }
     }
+
+@router.delete("/home/{home_id}/room_delete/{room_id}", status_code=200)
+def delete_room(
+    home_id: int,
+    room_id: int,
+    db: Session = Depends(get_db)
+):
+    # Verify the home exists
+    home = db.query(Home).filter(Home.homeID == home_id).first()
+    if not home:
+        raise HTTPException(status_code=404, detail="Home not found")
+    
+    # Verify the room exists and belongs to this home
+    room = db.query(Room).filter(Room.roomID == room_id, Room.homeID == home_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found in this home")
+    
+    try:
+        # Delete the room
+        db.delete(room)
+        db.commit()
+        return {"message": "Room deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting room: {str(e)}")
     
 @router.delete("/home/{home_id}/delete", status_code=200)
 def delete_home(home_id: int, user_id: int = Query(...), db: Session = Depends(get_db)):
