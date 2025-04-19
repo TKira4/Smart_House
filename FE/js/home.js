@@ -63,19 +63,43 @@ function displayHomeList(homes) {
       .then(response => response.json())
       .then(status => {
         const statusContainer = col.querySelector(".safety-status");
-        statusContainer.innerHTML = `
-          <div class="d-flex align-items-center gap-1 bg-white rounded px-2 py-1">
-            <img src="${status.is_safe ? '../images/safe.png' : '../images/warning.png'}" 
-                alt="${status.is_safe ? 'Safe' : 'Warning'}" 
-                style="width: 20px; height: 20px;" />
-            <span class="fw-bold text-${status.is_safe ? 'success' : 'danger'} small">
-              ${status.is_safe ? 'Safe!' : 'Warning!'}
-            </span>
-          </div>
-        `;
+        
+        if (status.is_safe) {
+          statusContainer.innerHTML = `
+            <div class="d-flex align-items-center gap-1 bg-white rounded px-2 py-1">
+              <img src="../images/safe.png" alt="Safe" style="width: 20px; height: 20px;" />
+              <span class="fw-bold text-success small">Safe!</span>
+            </div>
+          `;
+        } else {
+          // Create warning details (hidden by default)
+          const warningDetails = status.reasons.map(reason => 
+            `<div class="alert alert-danger p-1 mb-1 small">${reason}</div>`
+          ).join('');
+          
+          statusContainer.innerHTML = `
+            <div class="safety-status-wrapper">
+              <div class="d-flex align-items-center gap-1 bg-white rounded px-2 py-1 warning-header">
+                <img src="../images/warning.png" alt="Warning" style="width: 20px; height: 20px;" />
+                <span class="fw-bold text-danger small">
+                  Warning! (${status.reasons.length} issues)
+                </span>
+                <i class="bi bi-chevron-down ms-auto"></i>
+              </div>
+              <div class="warning-details">
+                ${warningDetails}
+              </div>
+            </div>
+          `;
+        }
       })
       .catch(error => {
         console.error("Error fetching safety status:", error);
+        col.querySelector(".safety-status").innerHTML = `
+          <div class="alert alert-warning p-1 small">
+            <i class="bi bi-exclamation-triangle"></i> Status check failed
+          </div>
+        `;
       });
   });
 }
