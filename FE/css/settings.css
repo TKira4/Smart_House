@@ -54,3 +54,26 @@ input.form-control {
   gap: 15px; 
   justify-content: center; 
 }
+
+#filter-section {
+  padding: 10px 0;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+}
+
+.input-group-prepend .input-group-text {
+  background-color: #007bff;
+  color: white;
+}
+
+.input-group {
+  max-width: 200px;
+}
+
+#from-date, #to-date {
+  max-width: 150px;
+}
+
+#filter-section select, #filter-section input {
+  font-size: 16px;
+}

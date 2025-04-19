@@ -38,14 +38,24 @@ async function initializeDashboard() {
     const [homeInfo, roomInfo, devices] = await Promise.all([
       fetchHomeInfo(homeID),
       fetchRoomInfo(roomID),
-      fetchRoomDevices(roomID)
+      fetchRoomDevices(roomID),
     ]);
+
+    // Đổ danh sách thiết bị vào bộ lọc
+    const deviceFilter = document.getElementById("device-filter");
+    deviceFilter.innerHTML = '<option value="">Tất cả thiết bị</option>';
+    devices.forEach((device) => {
+      const option = document.createElement("option");
+      option.value = device.deviceID;
+      option.textContent = device.deviceName;
+      deviceFilter.appendChild(option);
+    });
 
     // Update UI
     updateLocationInfo(homeInfo, roomInfo);
     renderDashboard(devices);
     setupChartSection(devices);
-    
+
     // Start polling for updates
     startDevicePolling(roomID);
   } catch (error) {
@@ -537,3 +547,77 @@ function startDevicePolling(roomID) {
 // Initialization
 // ======================
 document.addEventListener("DOMContentLoaded", initializeDashboard);
+
+
+// ==========================
+// Filter
+// ==========================
+document.addEventListener("DOMContentLoaded", () => {
+  // Khởi tạo Flatpickr cho input ngày
+  flatpickr("#from-date", { dateFormat: "Y-m-d" });
+  flatpickr("#to-date", { dateFormat: "Y-m-d" });
+
+  // Gán sự kiện khi người dùng thay đổi input lọc
+  ["device-filter", "time-filter", "from-date", "to-date"].forEach((id) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.addEventListener("change", filterDevices);
+    }
+  });
+
+  // Gán sự kiện cho nút "Lọc"
+  const filterBtn = document.getElementById("filter-button");
+  if (filterBtn) {
+    filterBtn.addEventListener("click", filterDevices);
+  }
+});
+
+// ==========================
+// Hàm lấy danh sách thiết bị
+// ==========================
+async function fetchRoomDevices(roomID) {
+  const response = await fetch(`${API_BASE_URL}/room/${roomID}/devices`);
+  if (!response.ok) {
+    throw new Error("Không thể lấy danh sách thiết bị");
+  }
+  return await response.json();
+}
+
+// ==========================
+// Hàm lọc thiết bị
+// ==========================
+async function filterDevices() {
+  const selectedDevice = document.getElementById("device-filter").value;
+  const selectedTime = document.getElementById("time-filter")?.value || "";
+  const fromDate = document.getElementById("from-date").value;
+  const toDate = document.getElementById("to-date").value;
+
+  const roomID = localStorage.getItem("activeRoomID");
+  if (!roomID) return;
+
+  try {
+    const devices = await fetchRoomDevices(roomID);
+
+    // Lọc theo thiết bị
+    let filtered = selectedDevice
+      ? devices.filter((device) => device.deviceID === parseInt(selectedDevice))
+      : devices;
+
+    // Lọc theo thời gian
+    filtered = filterByTime(filtered, selectedTime, fromDate, toDate);
+
+    // Hiển thị lại dashboard
+    if (filtered.length === 0) {
+      document.getElementById("dashboard-container").innerHTML =
+        "<div class='col-12 text-center text-muted mt-3'>Không có thiết bị phù hợp với bộ lọc.</div>";
+      document.getElementById("chart-section").innerHTML = "";
+    } else {
+      renderDashboard(filtered);
+      setupChartSection(filtered);
+    }
+  } catch (err) {
+    console.error("Lọc thiết bị thất bại:", err);
+  }
+}
+
+
