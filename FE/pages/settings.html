@@ -55,6 +55,12 @@
           <span id="home-info">Nhà: Chưa xác định</span> |
           <span id="room-info">Phòng: Chưa xác định</span>
         </div>
+
+<!-- Nút điều hướng: Chuyển phòng và Đăng ký thiết bị -->
+        <div class="d-flex justify-content-center gap-3 mb-4">
+          <button class="btn btn-secondary" onclick="navigateToRoomSelection()">Chuyển phòng</button>
+        </div>
+
         <!-- Phần cài đặt ngưỡng cho thiết bị cảm biến -->
         <div class="card mb-4">
           <div class="card-header">
@@ -124,6 +130,9 @@
     <script>
       function navigateTo(page) {
         window.location.href = page;
+      }
+      function navigateToRoomSelection() {
+        window.location.href = "room.html";
       }
     </script>
   </body>
