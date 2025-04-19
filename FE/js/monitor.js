@@ -444,17 +444,22 @@ function updateDeviceDisplay(deviceID, value) {
 
 function setupChartSection(devices) {
   const section = document.getElementById("chart-section");
-  section.innerHTML = "<h4 class='text-center'>Biểu đồ các thiết bị Numeric</h4>";
+  section.innerHTML = "<h4 class='text-center'>Biểu đồ các thiết bị</h4>";
 
-  devices
-    .filter(device => device.type === "numeric" && !["quat", "admin", "mat-khau", "mauled"].includes(device.feedName.toLowerCase()))
-    .forEach(device => {
-      const container = document.createElement("div");
-      container.className = "chart-container mb-3";
-      container.innerHTML = `<canvas id="chart-${device.deviceID}"></canvas>`;
-      section.appendChild(container);
-      renderDeviceChart(device);
-    });
+  const selectedDeviceID = parseInt(document.getElementById("device-filter").value);
+
+  // Nếu có chọn thiết bị cụ thể => chỉ vẽ biểu đồ cho nó
+  const filteredDevices = selectedDeviceID
+    ? devices.filter(d => d.deviceID === selectedDeviceID && d.type === "numeric")
+    : devices.filter(d => d.type === "numeric");
+
+  filteredDevices.forEach(device => {
+    const container = document.createElement("div");
+    container.className = "chart-container mb-3";
+    container.innerHTML = `<canvas id="chart-${device.deviceID}"></canvas>`;
+    section.appendChild(container);
+    renderDeviceChart(device);
+  });
 }
 
 async function renderDeviceChart(device) {
@@ -597,10 +602,11 @@ async function filterDevices() {
 
   try {
     const devices = await fetchRoomDevices(roomID);
-
+    console.log("selectedDevice value:", selectedDevice, typeof selectedDevice);
     // Lọc theo thiết bị
+    const selectedID = parseInt(selectedDevice);
     let filtered = selectedDevice
-      ? devices.filter((device) => device.deviceID === parseInt(selectedDevice))
+      ? devices.filter((device) => device.deviceID === selectedID)
       : devices;
 
     // Lọc theo thời gian
@@ -618,6 +624,39 @@ async function filterDevices() {
   } catch (err) {
     console.error("Lọc thiết bị thất bại:", err);
   }
+}
+
+/**
+ * Lọc theo thời gian (tùy chọn) dựa trên khoảng ngày chọn
+ */
+function filterByTime(devices, selectedTime, fromDate, toDate) {
+  // Nếu không có filter thời gian gì, thì trả về nguyên danh sách
+  if (!selectedTime && !fromDate && !toDate) return devices;
+
+  const now = new Date();
+
+  return devices.filter(device => {
+    const valueTime = new Date(device.timestamp || device.lastUpdated || now); // Sửa nếu bạn dùng field khác
+
+    // Nếu lọc theo ngày cụ thể
+    if (fromDate && toDate) {
+      const from = new Date(fromDate);
+      const to = new Date(toDate);
+      return valueTime >= from && valueTime <= to;
+    }
+
+    // Nếu chọn nhanh như "today", "week"
+    if (selectedTime === 'today') {
+      return valueTime.toDateString() === now.toDateString();
+    }
+    if (selectedTime === 'week') {
+      const weekAgo = new Date();
+      weekAgo.setDate(now.getDate() - 7);
+      return valueTime >= weekAgo;
+    }
+
+    return true; // fallback nếu không khớp điều kiện nào
+  });
 }
 
 
