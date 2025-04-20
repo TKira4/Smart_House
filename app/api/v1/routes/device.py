@@ -70,7 +70,6 @@ async def get_devices_in_room(room_id: int, db: Session = Depends(get_db)):
 #############################
 @router.post("/room/{room_id}/device_register", status_code=status.HTTP_201_CREATED)
 def register_device(room_id: int, device_data: DeviceRegisterSchema, user_id: int = Query(...), db: Session = Depends(get_db)):
-    # Kiểm tra xem phòng có tồn tại không
     room = db.query(Room).filter(Room.roomID == room_id).first()
     if not room:
         raise HTTPException(status_code=404, detail={"error": "Room not found"})
@@ -81,23 +80,23 @@ def register_device(room_id: int, device_data: DeviceRegisterSchema, user_id: in
         value=device_data.value,
         type=device_data.type,
         roomID=room_id,
-        feedName=device_data.feedName
+        feedName=device_data.feedName,
+        created_at=datetime.datetime.utcnow()
     )
     db.add(new_device)
     db.commit()
     db.refresh(new_device)
-    
-    # Tạo Action Log cho việc đăng ký thiết bị
+
     new_action = ActionLog(
         userID=user_id,
         deviceID=new_device.deviceID,
-        deviceName=new_device.deviceName,  
+        deviceName=new_device.deviceName,
         actionType="Register Device",
         timestamp=datetime.datetime.utcnow()
     )
     db.add(new_action)
     db.commit()
-    
+
     return {
         "message": "Device registered successfully",
         "device": {
@@ -107,7 +106,8 @@ def register_device(room_id: int, device_data: DeviceRegisterSchema, user_id: in
             "type": new_device.type,
             "value": float(new_device.value) if new_device.value is not None else None,
             "feedName": new_device.feedName,
-            "threshold": new_device.threshold
+            "threshold": new_device.threshold,
+            "created_at": new_device.created_at.isoformat()
         }
     }
 

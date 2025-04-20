@@ -15,4 +15,5 @@ class Device(Base):
     alert_logs = relationship("AlertLog", back_populates="device")
     action_logs = relationship("ActionLog", back_populates="device")
     feedName = Column(String(100), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
