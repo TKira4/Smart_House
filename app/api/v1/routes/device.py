@@ -30,21 +30,27 @@ class DeviceRegisterSchema(BaseModel):
 #############################
 # GET: Lấy danh sách thiết bị thuộc phòng
 #############################
-@router.get("/room/{room_id}/devices", response_model=list)
-def get_devices_in_room(room_id: int, db: Session = Depends(get_db)):
+@router.get("/room/{room_id}/devices")
+async def get_devices_in_room(room_id: int, db: Session = Depends(get_db)):
     devices = db.query(Device).filter(Device.roomID == room_id).all()
     if not devices:
-        raise HTTPException(status_code=404, detail={"error": "No devices found in this room", "status_code": 404})
+        raise HTTPException(status_code=404, detail="No devices found")
+
+    feed_data_map = await get_all_last_data(devices)
 
     result = []
     for d in devices:
+        last_data = feed_data_map.get(d.feedName, {})
+        last_value = last_data.get("value")
+        created_at = last_data.get("created_at")
+
         if d.type == "numeric":
             try:
-                device_value = float(d.value) if d.value is not None else None
+                device_value = float(last_value) if last_value is not None else None
             except ValueError:
                 device_value = None
         else:
-            device_value = d.value
+            device_value = last_value
 
         result.append({
             "deviceID": d.deviceID,
@@ -53,7 +59,8 @@ def get_devices_in_room(room_id: int, db: Session = Depends(get_db)):
             "type": d.type,
             "value": device_value,
             "feedName": d.feedName,
-            "threshold": d.threshold
+            "threshold": d.threshold,
+            "created_at": d.created_at.isoformat() if d.created_at else None
         })
 
     return result

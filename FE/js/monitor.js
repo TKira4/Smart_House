@@ -630,22 +630,33 @@ async function filterDevices() {
  * Lọc theo thời gian (tùy chọn) dựa trên khoảng ngày chọn
  */
 function filterByTime(devices, selectedTime, fromDate, toDate) {
-  // Nếu không có filter thời gian gì, thì trả về nguyên danh sách
   if (!selectedTime && !fromDate && !toDate) return devices;
 
   const now = new Date();
 
-  return devices.filter(device => {
-    const valueTime = new Date(device.timestamp || device.lastUpdated || now); // Sửa nếu bạn dùng field khác
+  return devices.filter((device) => {
+    const timeString = device.created_at || device.timestamp || device.lastUpdated;
+    
+    // Debug xem dữ liệu có không
+    console.log(`Device ${device.deviceName} - created_at:`, timeString);
+
+    if (!timeString) return false;
+
+    const valueTime = new Date(timeString);
+
+    // Debug: show parsed time
+    console.log(`Parsed time for ${device.deviceName}:`, valueTime.toISOString());
 
     // Nếu lọc theo ngày cụ thể
     if (fromDate && toDate) {
-      const from = new Date(fromDate);
-      const to = new Date(toDate);
+      const from = new Date(fromDate + "T00:00:00Z");
+      const to = new Date(toDate + "T23:59:59Z");
+
+      console.log(`Lọc từ ${from.toISOString()} đến ${to.toISOString()}`);
       return valueTime >= from && valueTime <= to;
     }
 
-    // Nếu chọn nhanh như "today", "week"
+    // Nếu chọn nhanh
     if (selectedTime === 'today') {
       return valueTime.toDateString() === now.toDateString();
     }
@@ -655,8 +666,11 @@ function filterByTime(devices, selectedTime, fromDate, toDate) {
       return valueTime >= weekAgo;
     }
 
-    return true; // fallback nếu không khớp điều kiện nào
+    return true;
   });
 }
+
+
+
 
 
