@@ -43,36 +43,27 @@ function displayRoomList(rooms) {
   }
 
   rooms.forEach((room) => {
-    // Tạo card kiểu monitor-card
     const card = document.createElement("div");
     card.className = "monitor-card";
     card.style.position = "relative";
 
-    // Icon cho phòng
     let iconSrc = "../images/room.png";
     const lowerName = room.nameRoom.toLowerCase();
-    if (lowerName.includes("tắm")) {
-      iconSrc = "../images/bathroom.png";
-    } else if (lowerName.includes("khách")) {
-      iconSrc = "../images/livingroom.png";
-    } else if (lowerName.includes("ngủ")) {
-      iconSrc = "../images/bedroom.png";
-    }
+    if (lowerName.includes("tắm")) iconSrc = "../images/bathroom.png";
+    else if (lowerName.includes("khách")) iconSrc = "../images/livingroom.png";
+    else if (lowerName.includes("ngủ")) iconSrc = "../images/bedroom.png";
 
-    // Nút xóa phòng (góc trên phải)
     const deleteButton = `
       <button class="btn btn-danger btn-sm" style="position:absolute; top:5px; right:5px;"
               onclick="deleteRoom(${room.roomID})">
         <i class="fas fa-trash-alt"></i>
       </button>`;
 
-    // Nút chọn phòng
     const chooseButton = `
       <button class="btn btn-primary mt-2" onclick="selectRoom(${room.roomID})">
         Chọn phòng
       </button>`;
 
-    // Nội dung card
     card.innerHTML = `
       ${deleteButton}
       <img src="${iconSrc}" alt="${room.nameRoom}" class="monitor-icon" />
@@ -81,24 +72,18 @@ function displayRoomList(rooms) {
       ${chooseButton}
     `;
 
-    // Thêm card vào roomListDiv
     roomListDiv.appendChild(card);
   });
 }
 
-// Khi người dùng chọn 1 phòng, lưu roomID và chuyển sang trang monitor
 function selectRoom(roomID) {
   localStorage.setItem("activeRoomID", roomID);
   window.location.href = "monitor.html";
 }
 
-// Xóa phòng
 async function deleteRoom(roomID) {
   if (!confirm("Bạn có chắc chắn muốn xóa phòng này?")) return;
-
-  // Lấy homeID
-  const homeID =
-    getQueryParam("home_id") || localStorage.getItem("activeHomeID");
+  const homeID = getQueryParam("home_id") || localStorage.getItem("activeHomeID");
   if (!homeID) {
     alert("Không xác định được home. Vui lòng quay lại trang chủ và chọn nhà.");
     return;
@@ -107,9 +92,7 @@ async function deleteRoom(roomID) {
   try {
     const response = await fetch(
       `http://127.0.0.1:8000/home/${homeID}/room_delete/${roomID}`,
-      {
-        method: "DELETE",
-      }
+      { method: "DELETE" }
     );
     if (!response.ok) {
       const result = await response.json();
@@ -117,14 +100,13 @@ async function deleteRoom(roomID) {
       return;
     }
     alert("Phòng đã được xóa.");
-    fetchRooms(homeID); // Cập nhật danh sách sau khi xóa
+    fetchRooms(homeID);
   } catch (error) {
     console.error("Error deleting room:", error);
     alert("Có lỗi xảy ra khi xóa phòng.");
   }
 }
 
-// Xử lý form đăng ký phòng mới
 document.addEventListener("DOMContentLoaded", function () {
   const registerRoomForm = document.getElementById("registerRoomForm");
   registerRoomForm.addEventListener("submit", async function (event) {
@@ -134,8 +116,7 @@ document.addEventListener("DOMContentLoaded", function () {
       showRoomFeedback("Vui lòng nhập tên phòng.", true);
       return;
     }
-    const homeID =
-      getQueryParam("home_id") || localStorage.getItem("activeHomeID");
+    const homeID = getQueryParam("home_id") || localStorage.getItem("activeHomeID");
     if (!homeID) {
       showRoomFeedback("Không xác định được home. Vui lòng chọn nhà.", true);
       return;
@@ -147,9 +128,7 @@ document.addEventListener("DOMContentLoaded", function () {
         `http://127.0.0.1:8000/home/${homeID}/room_register`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }
       );
@@ -159,9 +138,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
       showRoomFeedback(result.message, false);
-      // Reload danh sách phòng
       fetchRooms(homeID);
-      // Đóng modal sau 2 giây
       setTimeout(() => {
         const modalEl = document.getElementById("registerRoomModal");
         const modal = bootstrap.Modal.getInstance(modalEl);
@@ -173,104 +150,84 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Khi trang load, lấy homeID và tải danh sách phòng
-  const homeID =
-    getQueryParam("home_id") || localStorage.getItem("activeHomeID");
+  const homeID = getQueryParam("home_id") || localStorage.getItem("activeHomeID");
   if (homeID) {
     fetchRooms(homeID);
-
-    /* UYEN UPDATE 13 APR */
-    // NEW: Gọi API tất cả thiết bị trong home để vẽ biểu đồ tổng hợp
     fetch(`http://127.0.0.1:8000/home/${homeID}/all_devices`)
       .then((res) => res.json())
-      .then((devices) => drawCombinedCharts(devices))
-      .catch((err) => console.error("Lỗi khi vẽ biểu đồ tổng hợp:", err));
+      .then((devices) => drawRoomDeviceCharts(devices))
+      .catch((err) => console.error("Lỗi khi vẽ biểu đồ thiết bị:", err));
   } else {
     document.getElementById("roomList").innerHTML =
       "<p>Không xác định được home. Vui lòng quay lại trang chủ và chọn nhà.</p>";
   }
 });
 
-/* UYEN UPDATE 13 APR 
-
-async function drawCombinedCharts(devices) {
-  const categories = {
-    "nhiệt độ": [],
-    "độ ẩm": [],
-    "ánh sáng": [],
-  };
-
-  // Phân loại thiết bị
-  devices.forEach((device) => {
-    const name = device.deviceName.toLowerCase();
-    if (name.includes("nhiệt độ")) categories["nhiệt độ"].push(device);
-    else if (name.includes("độ ẩm")) categories["độ ẩm"].push(device);
-    else if (name.includes("ánh sáng")) categories["ánh sáng"].push(device);
-  });
-
-  // Hàm fetch lịch sử cho 1 thiết bị
-  async function fetchHistory(device) {
-    try {
-      const res = await fetch(
-        `http://127.0.0.1:8000/device/${device.deviceID}/data/history?limit=20`
-      );
-      const data = await res.json();
-      return data.reverse(); // để đúng thứ tự thời gian
-    } catch {
-      return [];
-    }
-  }
-
-  // Hàm vẽ biểu đồ
-  async function renderChart(canvasId, deviceList) {
-    const datasets = [];
-    let labels = [];
-
-    for (const device of deviceList) {
-      const history = await fetchHistory(device);
-      if (history.length === 0) continue;
-
-      if (labels.length === 0) {
-        labels = history.map((d) => d.created_at.substring(11, 16)); // hh:mm
-      }
-
-      datasets.push({
-        label: device.deviceName,
-        data: history.map((d) => parseFloat(d.value)),
-        fill: false,
-        tension: 0.3,
-      });
-    }
-
-    new Chart(document.getElementById(canvasId), {
-      type: "line",
-      data: { labels, datasets },
-      options: {
-        responsive: true,
-        plugins: {
-          title: {
-            display: true,
-            text: `Biểu đồ ${canvasId}`,
-            font: { size: 16 },
-          },
-        },
-        scales: {
-          y: {
-            beginAtZero: false,
-          },
-        },
-      },
-    });
-  }
-
-  await renderChart("tempChart", categories["nhiệt độ"]);
-  await renderChart("humidityChart", categories["độ ẩm"]);
-  await renderChart("lightChart", categories["ánh sáng"]);
-} */
-
-  function toProperCase(str) {
+function toProperCase(str) {
   return str.replace(/\w\S*/g, (txt) =>
     txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase()
   );
 }
 
+async function drawRoomDeviceCharts(devices) {
+  const container = document.getElementById("individualChartsContainer");
+  container.innerHTML = ""; // Xóa biểu đồ cũ nếu có
+
+  const filtered = devices.filter((d) => d.type === "numeric");
+
+  for (const device of filtered) {
+    const chartWrapper = document.createElement("div");
+    chartWrapper.className = "chart-container mb-4";
+    chartWrapper.innerHTML = `
+    <h5>${device.deviceName} (${device.roomName})</h5>
+    <canvas id="chart-${device.deviceID}" height="200"></canvas>
+  `;
+
+    container.appendChild(chartWrapper);
+    await renderDeviceChart(device);
+  }
+}
+
+
+async function renderDeviceChart(device) {
+  try {
+    const response = await fetch(`http://127.0.0.1:8000/device/${device.deviceID}/data/history?limit=20`);
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!data.length) return;
+
+    const ctx = document.getElementById(`chart-${device.deviceID}`).getContext("2d");
+    new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: data.map((d) => d.created_at.substring(11, 16)),
+        datasets: [{
+          label: device.deviceName,
+          data: data.map((d) => parseFloat(d.value)),
+          borderColor: "rgba(75, 192, 192, 1)",
+          backgroundColor: "rgba(75, 192, 192, 0.2)",
+          tension: 0.3,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: `Lịch sử ${device.deviceName}`,
+          },
+        },
+        scales: {
+          x: {
+            title: { display: true, text: "Thời gian" },
+          },
+          y: {
+            title: { display: true, text: "Giá trị" },
+          },
+        },
+      },
+    });
+  } catch (error) {
+    console.error(`Chart render failed for device ${device.deviceID}:`, error);
+  }
+}

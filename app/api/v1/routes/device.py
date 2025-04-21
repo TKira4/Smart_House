@@ -254,3 +254,25 @@ def get_device_history(device_id: int, limit: int = 20, db: Session = Depends(ge
         return history
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching history from Adafruit: {str(e)}")
+
+@router.get("/home/{home_id}/all_devices")
+def get_all_devices_in_home(home_id: int, db: Session = Depends(get_db)):
+    devices = (
+        db.query(Device, Room.nameRoom)
+        .join(Room, Device.roomID == Room.roomID)
+        .filter(Room.homeID == home_id)
+        .all()
+    )
+
+    result = []
+    for device, room_name in devices:
+        result.append({
+            "deviceID": device.deviceID,
+            "deviceName": device.deviceName,
+            "type": device.type,
+            "feedName": device.feedName,
+            "value": device.value,
+            "roomName": room_name  
+        })
+    return result
+
