@@ -336,4 +336,83 @@ function formatTimestamp(isoString) {
   );
 }
 
+function applyLogFilters() {
+  const fromDate = document.getElementById("from-date").value;
+  const toDate = document.getElementById("to-date").value;
+  const userID = localStorage.getItem("userID");
+
+  if (userID) {
+    fetchActionLogs(userID, fromDate, toDate);
+    fetchAlertLogs(userID, fromDate, toDate);
+  }
+}
+
+// Thêm filter cho Action Logs
+async function fetchActionLogs(userID, fromDate = "", toDate = "") {
+  try {
+    let url = `http://127.0.0.1:8000/action_logs?user_id=${userID}`;
+    if (fromDate && toDate) {
+      url += `&from_date=${fromDate}&to_date=${toDate}`;
+    }
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to fetch action logs");
+    const logs = await response.json();
+    populateActionLogs(logs);
+  } catch (error) {
+    console.error("Error fetching action logs:", error);
+  }
+}
+
+// Thêm filter cho Alert Logs
+async function fetchAlertLogs(userID, fromDate = "", toDate = "") {
+  let url = `http://127.0.0.1:8000/alert_logs?user_id=${userID}`;
+  if (fromDate && toDate) {
+    url += `&from_date=${fromDate}&to_date=${toDate}`;
+  }
+
+  try {
+    const response = await fetch(url);
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.warn("Response error:", result);
+      throw new Error(result.detail || "Failed to fetch alert logs");
+    }
+
+    populateAlertLogs(result);
+  } catch (error) {
+    console.error("Error fetching alert logs:", error);
+  }
+}
+
+async function createAlert(deviceID, type, value) {
+  const response = await fetch(`http://127.0.0.1:8000/alert_logs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      device_id: deviceID,
+      alert_type: type,
+      alert_value: value,
+      alert_status: "Pending"
+    }),
+  });
+
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.detail || "Failed to create alert log");
+  }
+
+  alert("Cảnh báo đã được tạo thành công!");
+}
+
+function applyAlertLogFilters() {
+  const userID = localStorage.getItem("userID");
+  const from = document.getElementById("alert-from-date").value;
+  const to = document.getElementById("alert-to-date").value;
+  fetchAlertLogs(userID, from, to);
+}
+
+
 
