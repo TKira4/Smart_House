@@ -1,3 +1,5 @@
+// monitor.js
+
 // Hàm lấy tham số từ URL
 function getQueryParam(param) {
   const urlParams = new URLSearchParams(window.location.search);
@@ -16,13 +18,11 @@ function showRoomFeedback(message, isError = true) {
   }, 5000);
 }
 
-// Hàm tải danh sách phòng từ API
+// Fetch danh sách phòng
 function fetchRooms(homeID) {
   fetch(`http://127.0.0.1:8000/home/${homeID}/rooms`)
     .then((response) => {
-      if (!response.ok) {
-        throw new Error("Failed to fetch rooms");
-      }
+      if (!response.ok) throw new Error("Failed to fetch rooms");
       return response.json();
     })
     .then((data) => displayRoomList(data))
@@ -33,7 +33,7 @@ function fetchRooms(homeID) {
     });
 }
 
-// Hàm hiển thị danh sách phòng (giống style trang Giám Sát)
+// Hiển thị danh sách phòng
 function displayRoomList(rooms) {
   const roomListDiv = document.getElementById("roomList");
   roomListDiv.innerHTML = "";
@@ -76,11 +76,13 @@ function displayRoomList(rooms) {
   });
 }
 
+// Chọn phòng
 function selectRoom(roomID) {
   localStorage.setItem("activeRoomID", roomID);
   window.location.href = "monitor.html";
 }
 
+// Xóa phòng
 async function deleteRoom(roomID) {
   if (!confirm("Bạn có chắc chắn muốn xóa phòng này?")) return;
   const homeID = getQueryParam("home_id") || localStorage.getItem("activeHomeID");
@@ -107,7 +109,102 @@ async function deleteRoom(roomID) {
   }
 }
 
+// Hàm vẽ các biểu đồ cho thiết bị trong phòng
+async function drawRoomDeviceCharts(devices) {
+  const container = document.getElementById("individualChartsContainer");
+  container.innerHTML = "";
+
+  // Lấy giá trị ngày từ input
+  const fromDate = document.getElementById("from-date")?.value;
+  const toDate   = document.getElementById("to-date")?.value;
+
+  // Lọc chỉ lấy thiết bị numeric
+  const filtered = devices.filter((d) => d.type === "numeric");
+
+  for (const device of filtered) {
+    const chartWrapper = document.createElement("div");
+    chartWrapper.className = "chart-container mb-4";
+    chartWrapper.innerHTML = `
+      <h5>${device.deviceName} (${device.roomName})</h5>
+      <canvas id="chart-${device.deviceID}" height="200"></canvas>
+    `;
+    container.appendChild(chartWrapper);
+    await renderDeviceChart(device, fromDate, toDate);
+  }
+}
+
+async function renderDeviceChart(device, fromDate = "", toDate = "") {
+  // 1. Xây URL
+  let url = `http://127.0.0.1:8000/device/${device.deviceID}/data/history?limit=20`;
+  if (fromDate) url += `&from_date=${fromDate}`;
+  if (toDate)   url += `&to_date=${toDate}`;
+
+  // 2. Gọi API
+  let data = [];
+  try {
+    const response = await fetch(url);
+    if (response.ok) data = await response.json();
+  } catch (e) {
+    console.error(`Failed to fetch history for device ${device.deviceID}`, e);
+  }
+
+  // 3. Lấy context của canvas
+  const canvas = document.getElementById(`chart-${device.deviceID}`);
+  const ctx = canvas.getContext("2d");
+
+  // 4. Chuẩn bị labels và values (dù mảng rỗng)
+  const labels = data.map(d => d.created_at.substring(11, 16));
+  const values = data.map(d => parseFloat(d.value));
+
+  // 5. Nếu đã có chart trước đó, hủy nó để tránh vẽ đè
+  if (canvas._chartInstance) {
+    canvas._chartInstance.destroy();
+  }
+
+  // 6. Khởi tạo chart – axes vẫn hiện, data có hoặc không
+  const chart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: device.deviceName,
+        data: values,
+        tension: 0.3,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        title: {
+          display: true,
+          text: data.length
+            ? `Lịch sử ${device.deviceName}`
+            : `Không có dữ liệu ${fromDate || ""}→${toDate || ""}`
+        },
+      },
+      scales: {
+        x: { title: { display: true, text: "Thời gian" } },
+        y: { title: { display: true, text: "Giá trị" } },
+      },
+    },
+  });
+
+  // 7. Lưu instance để lần sau có thể destroy
+  canvas._chartInstance = chart;
+}
+
+
+
+// Biến đổi chuỗi thành Proper Case
+function toProperCase(str) {
+  return str.replace(/\w\S*/g, (txt) =>
+    txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase()
+  );
+}
+
+// Thiết lập sự kiện khi DOM load xong
 document.addEventListener("DOMContentLoaded", function () {
+  // 1. Đăng ký form thêm phòng
   const registerRoomForm = document.getElementById("registerRoomForm");
   registerRoomForm.addEventListener("submit", async function (event) {
     event.preventDefault();
@@ -121,15 +218,13 @@ document.addEventListener("DOMContentLoaded", function () {
       showRoomFeedback("Không xác định được home. Vui lòng chọn nhà.", true);
       return;
     }
-    const payload = { nameRoom: roomName };
-
     try {
       const response = await fetch(
         `http://127.0.0.1:8000/home/${homeID}/room_register`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ nameRoom: roomName }),
         }
       );
       const result = await response.json();
@@ -141,8 +236,7 @@ document.addEventListener("DOMContentLoaded", function () {
       fetchRooms(homeID);
       setTimeout(() => {
         const modalEl = document.getElementById("registerRoomModal");
-        const modal = bootstrap.Modal.getInstance(modalEl);
-        modal.hide();
+        bootstrap.Modal.getInstance(modalEl).hide();
       }, 2000);
     } catch (error) {
       console.error("Error registering room:", error);
@@ -150,9 +244,40 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
+  // 2. Thêm bộ lọc ngày tháng
+  const fromInput = document.createElement("input");
+  fromInput.type = "date";
+  fromInput.id = "from-date";
+  fromInput.className = "form-control d-inline-block mx-2";
+
+  const toInput = document.createElement("input");
+  toInput.type = "date";
+  toInput.id = "to-date";
+  toInput.className = "form-control d-inline-block mx-2";
+
+  const filterBtn = document.createElement("button");
+  filterBtn.textContent = "Lọc theo thời gian";
+  filterBtn.className = "btn btn-primary";
+  filterBtn.onclick = () => {
+    const homeID = getQueryParam("home_id") || localStorage.getItem("activeHomeID");
+    fetch(`http://127.0.0.1:8000/home/${homeID}/all_devices`)
+      .then((res) => res.json())
+      .then((devices) => drawRoomDeviceCharts(devices))
+      .catch((err) => console.error("Lỗi khi vẽ biểu đồ thiết bị:", err));
+  };
+
+  const controls = document.createElement("div");
+  controls.className = "mb-4 text-center";
+  controls.appendChild(fromInput);
+  controls.appendChild(toInput);
+  controls.appendChild(filterBtn);
+
+  // 3. Fetch ban đầu khi load trang
   const homeID = getQueryParam("home_id") || localStorage.getItem("activeHomeID");
   if (homeID) {
     fetchRooms(homeID);
+    const container = document.getElementById("individualChartsContainer");
+    container.parentElement.insertBefore(controls, container);
     fetch(`http://127.0.0.1:8000/home/${homeID}/all_devices`)
       .then((res) => res.json())
       .then((devices) => drawRoomDeviceCharts(devices))
@@ -162,72 +287,3 @@ document.addEventListener("DOMContentLoaded", function () {
       "<p>Không xác định được home. Vui lòng quay lại trang chủ và chọn nhà.</p>";
   }
 });
-
-function toProperCase(str) {
-  return str.replace(/\w\S*/g, (txt) =>
-    txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase()
-  );
-}
-
-async function drawRoomDeviceCharts(devices) {
-  const container = document.getElementById("individualChartsContainer");
-  container.innerHTML = ""; // Xóa biểu đồ cũ nếu có
-
-  const filtered = devices.filter((d) => d.type === "numeric");
-
-  for (const device of filtered) {
-    const chartWrapper = document.createElement("div");
-    chartWrapper.className = "chart-container mb-4";
-    chartWrapper.innerHTML = `
-    <h5>${device.deviceName} (${device.roomName})</h5>
-    <canvas id="chart-${device.deviceID}" height="200"></canvas>
-  `;
-
-    container.appendChild(chartWrapper);
-    await renderDeviceChart(device);
-  }
-}
-
-
-async function renderDeviceChart(device) {
-  try {
-    const response = await fetch(`http://127.0.0.1:8000/device/${device.deviceID}/data/history?limit=20`);
-    if (!response.ok) return;
-    const data = await response.json();
-    if (!data.length) return;
-
-    const ctx = document.getElementById(`chart-${device.deviceID}`).getContext("2d");
-    new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: data.map((d) => d.created_at.substring(11, 16)),
-        datasets: [{
-          label: device.deviceName,
-          data: data.map((d) => parseFloat(d.value)),
-          borderColor: "rgba(75, 192, 192, 1)",
-          backgroundColor: "rgba(75, 192, 192, 0.2)",
-          tension: 0.3,
-        }],
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          title: {
-            display: true,
-            text: `Lịch sử ${device.deviceName}`,
-          },
-        },
-        scales: {
-          x: {
-            title: { display: true, text: "Thời gian" },
-          },
-          y: {
-            title: { display: true, text: "Giá trị" },
-          },
-        },
-      },
-    });
-  } catch (error) {
-    console.error(`Chart render failed for device ${device.deviceID}:`, error);
-  }
-}

@@ -1,15 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel
 from app.core.database import SessionLocal
 from app.core.adafruit_client import *
 from app.models.device import Device
 from app.models.room import Room
 from app.models.action_log import ActionLog
-
+import logging
 router = APIRouter()
-
+logger = logging.getLogger(__name__)
 def get_db():
     db = SessionLocal()
     try:
@@ -243,17 +243,69 @@ def get_device_last_data(device_id: int, db: Session = Depends(get_db)):
 # GET: Lấy lịch sử dữ liệu của thiết bị
 #############################
 @router.get("/device/{device_id}/data/history")
-def get_device_history(device_id: int, limit: int = 20, db: Session = Depends(get_db)):
+def get_device_history(
+    device_id: int,
+    limit: int = Query(20, ge=1),
+    from_date: str = Query(None),
+    to_date:   str = Query(None),
+    db: Session = Depends(get_db)
+):
+    # 1. Kiểm tra device
     device = db.query(Device).filter(Device.deviceID == device_id).first()
     if not device:
-        raise HTTPException(status_code=404, detail="Device not found")
+        raise HTTPException(404, "Device not found")
     if not device.feedName:
-        raise HTTPException(status_code=400, detail="FeedName not set for this device")
+        raise HTTPException(400, "FeedName not set for this device")
+
+    # 2. Parse from_date/to_date
+    start_dt = None
+    end_dt   = None
     try:
-        history = get_feed_history(device.feedName, limit)
-        return history
+        if from_date:
+            start_dt = datetime.strptime(from_date, "%Y-%m-%d")
+        if to_date:
+            end_dt = datetime.strptime(to_date, "%Y-%m-%d") + timedelta(hours=23, minutes=59, seconds=59)
+    except ValueError as e:
+        raise HTTPException(400, f"Invalid date format: {e}")
+
+    # 3. Lấy raw history
+    try:
+        raw_history = get_feed_history(device.feedName, limit=limit)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching history from Adafruit: {str(e)}")
+        logger.error(f"Error fetching history: {e}", exc_info=True)
+        raise HTTPException(500, "Error fetching history from feed service")
+
+    # 4. Filter thủ công, bỏ tzinfo trước khi so sánh
+    filtered = []
+    for entry in raw_history:
+        # Giả sử mỗi entry là dict với key "created_at" và "value"
+        ts_str = entry.get("created_at") or entry.get("createdAt")
+        if not ts_str:
+            continue
+
+        # parse ISO → datetime (có thể aware)
+        try:
+            ts = datetime.fromisoformat(ts_str)
+        except ValueError:
+            continue
+
+        # loại bỏ tzinfo để thành naive
+        if ts.tzinfo is not None:
+            ts = ts.replace(tzinfo=None)
+
+        # filter theo khoảng ngày
+        if start_dt and ts < start_dt:
+            continue
+        if end_dt   and ts > end_dt:
+            continue
+
+        filtered.append({
+            "created_at": ts.isoformat(),
+            "value":       entry.get("value")
+        })
+
+    # 5. Giới hạn số bản ghi và trả về
+    return filtered[:limit]
 
 @router.get("/home/{home_id}/all_devices")
 def get_all_devices_in_home(home_id: int, db: Session = Depends(get_db)):
@@ -272,7 +324,8 @@ def get_all_devices_in_home(home_id: int, db: Session = Depends(get_db)):
             "type": device.type,
             "feedName": device.feedName,
             "value": device.value,
-            "roomName": room_name  
+            "roomName": room_name,
+            "timestamp": device.timestamp.isoformat() if hasattr(device, "timestamp") and device.timestamp else None
         })
     return result
 
