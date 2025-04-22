@@ -42,22 +42,65 @@ function displayHomeList(homes) {
   }
 
   homes.forEach(home => {
-      const col = document.createElement("div");
-      col.className = "col-md-4";
-      col.innerHTML = `
-          <div class="house-card position-relative">
-              <button class="btn btn-danger position-absolute top-0 end-0 m-2" onclick="deleteHome(${home.homeID})">
-                  <i class="fas fa-trash-alt"></i>
-              </button>
-              <img src="../images/house.jpg" alt="House Image" class="img-fluid" />
-              <div class="location-info">
-                  <p>Địa chỉ: ${home.address}</p>
-                  <p>Home ID: ${home.homeID}</p>
-                  <button class="btn btn-outline-primary" onclick="selectHome(${home.homeID})">Chọn nhà này</button>
+    const col = document.createElement("div");
+    col.className = "col-md-5";
+    col.innerHTML = `
+        <div class="house-card position-relative">
+            <div class="safety-status position-absolute top-0 start-0 m-2"></div>
+            <button class="btn btn-danger position-absolute top-0 end-0 m-2" onclick="deleteHome(${home.homeID})">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+            <img src="../images/house.jpg" alt="House Image" class="img-fluid" />
+            <div class="location-info">
+                <p>Địa chỉ: ${home.address}</p>
+                <p>Home ID: ${home.homeID}</p>
+                <button class="btn btn-outline-primary" onclick="selectHome(${home.homeID})">Chọn nhà này</button>
+            </div>
+        </div>
+    `;
+    homeListDiv.appendChild(col);
+    fetch(`http://127.0.0.1:8000/home/${home.homeID}/status`)
+      .then(response => response.json())
+      .then(status => {
+        const statusContainer = col.querySelector(".safety-status");
+        
+        if (status.is_safe) {
+          statusContainer.innerHTML = `
+            <div class="d-flex align-items-center gap-1 bg-white rounded px-2 py-1">
+              <img src="../images/safe.png" alt="Safe" style="width: 20px; height: 20px;" />
+              <span class="fw-bold text-success small">Safe!</span>
+            </div>
+          `;
+        } else {
+          // Create warning details (hidden by default)
+          const warningDetails = status.reasons.map(reason => 
+            `<div class="alert alert-danger p-1 mb-1 small">${reason}</div>`
+          ).join('');
+          
+          statusContainer.innerHTML = `
+            <div class="safety-status-wrapper">
+              <div class="d-flex align-items-center gap-1 bg-white rounded px-2 py-1 warning-header">
+                <img src="../images/warning.png" alt="Warning" style="width: 20px; height: 20px;" />
+                <span class="fw-bold text-danger small">
+                  Warning! (${status.reasons.length} issues)
+                </span>
+                <i class="bi bi-chevron-down ms-auto"></i>
               </div>
+              <div class="warning-details">
+                ${warningDetails}
+              </div>
+            </div>
+          `;
+        }
+      })
+      .catch(error => {
+        console.error("Error fetching safety status:", error);
+        col.querySelector(".safety-status").innerHTML = `
+          <div class="alert alert-warning p-1 small">
+            <i class="bi bi-exclamation-triangle"></i> Status check failed
           </div>
-      `;
-      homeListDiv.appendChild(col);
+        `;
+      });
   });
 }
 

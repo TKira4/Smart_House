@@ -43,6 +43,31 @@ def register_room(home_id: int, request: RoomRegisterRequest, db: Session = Depe
             "homeID": new_room.homeID
         }
     }
+
+@router.delete("/home/{home_id}/room_delete/{room_id}", status_code=200)
+def delete_room(
+    home_id: int,
+    room_id: int,
+    db: Session = Depends(get_db)
+):
+    # Verify the home exists
+    home = db.query(Home).filter(Home.homeID == home_id).first()
+    if not home:
+        raise HTTPException(status_code=404, detail="Home not found")
+    
+    # Verify the room exists and belongs to this home
+    room = db.query(Room).filter(Room.roomID == room_id, Room.homeID == home_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found in this home")
+    
+    try:
+        # Delete the room
+        db.delete(room)
+        db.commit()
+        return {"message": "Room deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting room: {str(e)}")
     
 @router.delete("/home/{home_id}/delete", status_code=200)
 def delete_home(home_id: int, user_id: int = Query(...), db: Session = Depends(get_db)):
@@ -69,6 +94,39 @@ def get_home(home_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Home not found")
     return home
 
+@router.get("/home/{home_id}/status")
+def get_home_safety_status(home_id: int, db: Session = Depends(get_db)):
+    home = db.query(Home).filter(Home.homeID == home_id).first()
+    if not home:
+        raise HTTPException(status_code=404, detail="Home not found")
 
+    is_safe = True
+    reasons = []
+
+    for room in home.rooms:
+        for device in room.devices:
+            if device.value is None:
+                continue
+            value = float(device.value)
+            threshold = device.threshold
+            if device.feedName == "nhietdo" and value > threshold:
+                is_safe = False
+                reasons.append(f"Nhiệt độ cao: {value}°C")
+            elif device.feedName == "doam" and value < 20:
+                if value < 20:
+                    is_safe = False
+                    reasons.append(f"Độ ẩm thấp: {device.value}%")
+                elif value > threshold: 
+                    is_safe = False
+                    reasons.append(f"Độ ẩm cao: {device.value}%")
+            elif device.feedName == "anhsang" and value > threshold:
+                is_safe = False
+                reasons.append(f"Ánh sáng mạnh: {device.value} lux")
+
+    return {
+        "home_id": home_id,
+        "is_safe": is_safe,
+        "reasons": reasons,
+    }
 
 
