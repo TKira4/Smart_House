@@ -446,70 +446,70 @@ function setupChartSection(devices) {
   const section = document.getElementById("chart-section");
   section.innerHTML = "<h4 class='text-center'>Biểu đồ các thiết bị</h4>";
 
-  const selectedDeviceID = parseInt(document.getElementById("device-filter").value);
+  const selectedID = parseInt(document.getElementById("device-filter").value);
+  const fromDate   = document.getElementById("from-date").value;
+  const toDate     = document.getElementById("to-date").value;
 
-  // Nếu có chọn thiết bị cụ thể => chỉ vẽ biểu đồ cho nó
-  const filteredDevices = selectedDeviceID
-    ? devices.filter(d => d.deviceID === selectedDeviceID && d.type === "numeric")
+  const filtered = selectedID
+    ? devices.filter(d => d.deviceID === selectedID && d.type === "numeric")
     : devices.filter(d => d.type === "numeric");
 
-  filteredDevices.forEach(device => {
-    const container = document.createElement("div");
-    container.className = "chart-container mb-3";
-    container.innerHTML = `<canvas id="chart-${device.deviceID}"></canvas>`;
-    section.appendChild(container);
-    renderDeviceChart(device);
+  filtered.forEach(device => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "chart-container mb-3";
+    wrapper.innerHTML = `<canvas id="chart-${device.deviceID}"></canvas>`;
+    section.appendChild(wrapper);
+    renderDeviceChart(device, fromDate, toDate);
   });
 }
 
-async function renderDeviceChart(device) {
+
+async function renderDeviceChart(device, fromDate = "", toDate = "") {
+  let url = `${API_BASE_URL}/device/${device.deviceID}/data/history?limit=20`;
+  if (fromDate) url += `&from_date=${fromDate}`;
+  if (toDate)   url += `&to_date=${toDate}`;
+
   try {
-    const response = await fetch(`${API_BASE_URL}/device/${device.deviceID}/data/history?limit=20`);
-    if (!response.ok) return;
-    
-    const data = await response.json();
-    if (!data.length) return;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
 
     const ctx = document.getElementById(`chart-${device.deviceID}`).getContext('2d');
-    
+    if (charts[device.deviceID]) charts[device.deviceID].destroy();
+
+    const labels = data.reverse().map(d => d.created_at?.substring(11,16) || '');
+    const values = data.map(d => parseFloat(d.value));
+
     charts[device.deviceID] = new Chart(ctx, {
       type: 'line',
-      data: {
-        labels: data.reverse().map(d => d.created_at?.substring(11, 16) || ''),
-        datasets: [{
-          label: device.deviceName,
-          data: data.map(d => parseFloat(d.value)),
-          borderColor: 'rgba(75, 192, 192, 1)',
-          backgroundColor: 'rgba(75, 192, 192, 0.2)',
-          tension: 0.3
-        }]
-      },
+      data: { labels, datasets: [{
+        label: device.deviceName,
+        data: values,
+        borderColor: 'rgba(75,192,192,1)',
+        backgroundColor: 'rgba(75,192,192,0.2)',
+        tension: 0.3
+      }]},
       options: {
         responsive: true,
         plugins: {
           title: {
             display: true,
-            text: `Lịch sử ${device.deviceName}`
+            text: data.length
+              ? `Lịch sử ${device.deviceName}`
+              : `Không có dữ liệu ${fromDate || ''}→${toDate || ''}`
           }
         },
         scales: {
           x: { title: { display: true, text: 'Thời gian' } },
-          y: {
-            title: { 
-              display: true, 
-              text: device.feedName.includes("nhietdo") ? 'Nhiệt độ (°C)' :
-                    device.feedName.includes("doam") ? 'Độ ẩm (%)' :
-                    device.feedName.includes("anhsang") ? 'Ánh sáng (lux)' :
-                    'Giá trị'
-            } 
-          }
+          y: { title: { display: true, text: 'Giá trị' } }
         }
       }
     });
-  } catch (error) {
-    console.error(`Chart render failed for device ${device.deviceID}:`, error);
+  } catch (e) {
+    console.error(`Chart render failed for ${device.deviceID}`, e);
   }
 }
+
 
 // ======================
 // Utility Functions
@@ -592,39 +592,26 @@ async function fetchRoomDevices(roomID) {
 // Hàm lọc thiết bị
 // ==========================
 async function filterDevices() {
-  const selectedDevice = document.getElementById("device-filter").value;
-  const selectedTime = document.getElementById("time-filter")?.value || "";
+  const sel      = document.getElementById("device-filter").value;
   const fromDate = document.getElementById("from-date").value;
-  const toDate = document.getElementById("to-date").value;
-
-  const roomID = localStorage.getItem("activeRoomID");
+  const toDate   = document.getElementById("to-date").value;
+  const roomID   = localStorage.getItem("activeRoomID");
   if (!roomID) return;
 
   try {
     const devices = await fetchRoomDevices(roomID);
-    console.log("selectedDevice value:", selectedDevice, typeof selectedDevice);
-    // Lọc theo thiết bị
-    const selectedID = parseInt(selectedDevice);
-    let filtered = selectedDevice
-      ? devices.filter((device) => device.deviceID === selectedID)
+    const selectedID = parseInt(sel);
+    const filtered = sel
+      ? devices.filter(d => d.deviceID === selectedID)
       : devices;
 
-    // Lọc theo thời gian
-    filtered = filterByTime(filtered, selectedTime, fromDate, toDate);
-
-    // Hiển thị lại dashboard
-    if (filtered.length === 0) {
-      document.getElementById("dashboard-container").innerHTML =
-        "<div class='col-12 text-center text-muted mt-3'>Không có thiết bị phù hợp với bộ lọc.</div>";
-      document.getElementById("chart-section").innerHTML = "";
-    } else {
-      renderDashboard(filtered);
-      setupChartSection(filtered);
-    }
+    renderDashboard(filtered);
+    setupChartSection(filtered);
   } catch (err) {
-    console.error("Lọc thiết bị thất bại:", err);
+    console.error("Lọc thất bại:", err);
   }
 }
+
 
 /**
  * Lọc theo thời gian (tùy chọn) dựa trên khoảng ngày chọn
