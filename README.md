@@ -12,6 +12,11 @@ pip install -r .\requirements.txt   # Cài các thư viện cần thiết
 uvicorn app.main:app --reload
 ```
 
+# Lệnh chạy tạo bảng database
+```basg
+py -B -m app.core.create_db
+```
+
 # Cấu trúc thư mục
 ```plaintext
 smart_house/

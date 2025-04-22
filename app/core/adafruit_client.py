@@ -23,7 +23,7 @@ def get_last_data(feed_name: str):
     response.raise_for_status()
     return response.json()
 
-def get_feed_history(feed_name: str, limit: int = 20):
+def get_feed_history(feed_name: str, limit: int = 50):
     """
     Lấy lịch sử dữ liệu từ feed của Adafruit IO.
     """

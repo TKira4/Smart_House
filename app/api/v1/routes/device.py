@@ -8,8 +8,10 @@ from app.models.device import Device
 from app.models.room import Room
 from app.models.action_log import ActionLog
 import logging
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
 def get_db():
     db = SessionLocal()
     try:
@@ -25,7 +27,7 @@ class DeviceRegisterSchema(BaseModel):
     state: str = "OFF"          
     value: float | None = None   
     type: str                  
-    feedName: str   
+    feedName: str
 
 #############################
 # GET: Lấy danh sách thiết bị thuộc phòng
@@ -81,7 +83,7 @@ def register_device(room_id: int, device_data: DeviceRegisterSchema, user_id: in
         type=device_data.type,
         roomID=room_id,
         feedName=device_data.feedName,
-        created_at=datetime.datetime.utcnow()
+        created_at=datetime.utcnow()  # Changed datetime.utcnow()
     )
     db.add(new_device)
     db.commit()
@@ -92,7 +94,7 @@ def register_device(room_id: int, device_data: DeviceRegisterSchema, user_id: in
         deviceID=new_device.deviceID,
         deviceName=new_device.deviceName,
         actionType="Register Device",
-        timestamp=datetime.datetime.utcnow()
+        timestamp=datetime.utcnow()  # Changed datetime.utcnow()
     )
     db.add(new_action)
     db.commit()
@@ -138,7 +140,7 @@ def control_device_by_id(device_id: int, control: ControlSchema, db: Session = D
         deviceID=device_id,
         deviceName=device.deviceName if device.deviceName is not None else "Unknown Device",
         actionType=f"Control Device: {control.command}",
-        timestamp=datetime.datetime.utcnow()
+        timestamp=datetime.utcnow()  # Changed datetime.utcnow()
     )
     db.add(new_action)
     db.commit()
@@ -169,7 +171,7 @@ def delete_device(device_id: int, user_id: int = Query(...), db: Session = Depen
         deviceID=device_id,
         deviceName=device_name,
         actionType="Delete Device",
-        timestamp=datetime.datetime.utcnow()
+        timestamp=datetime.utcnow()  # Changed datetime.utcnow()
     )
     db.add(new_action)
     db.commit()
@@ -212,7 +214,7 @@ def update_device_threshold(device_id: int, update_data: ThresholdUpdateSchema, 
         deviceID=device_id,
         deviceName=device.deviceName if device.deviceName is not None else "Unknown Device",
         actionType="Update Threshold",
-        timestamp=datetime.datetime.utcnow()
+        timestamp=datetime.utcnow()  # Changed datetime.utcnow()
     )
     db.add(new_action)
     db.commit()
@@ -245,7 +247,7 @@ def get_device_last_data(device_id: int, db: Session = Depends(get_db)):
 @router.get("/device/{device_id}/data/history")
 def get_device_history(
     device_id: int,
-    limit: int = Query(20, ge=1),
+    limit: int = Query(50, ge=1),
     from_date: str = Query(None),
     to_date:   str = Query(None),
     db: Session = Depends(get_db)
@@ -328,4 +330,3 @@ def get_all_devices_in_home(home_id: int, db: Session = Depends(get_db)):
             "timestamp": device.timestamp.isoformat() if hasattr(device, "timestamp") and device.timestamp else None
         })
     return result
-
